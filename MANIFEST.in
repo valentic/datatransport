@@ -1,0 +1,8 @@
+include CHANGES.txt LICENSE INSTALL MIGRATION
+global-exclude *.pyc
+graft src/datatransport/templates
+graft contrib 
+graft tests
+#recursive-include docs *
+recursive-include src/datatransport/templates *
+#include datatransport/etc/*

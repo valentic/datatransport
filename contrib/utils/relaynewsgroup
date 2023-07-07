@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+
+############################################################################
+#
+#   Group Relay
+#
+#   This script will relay the messages from one group on a source news
+#   server to another group on a destination server (which could be the
+#   same as the source if needed). The intended use of this script is 
+#   for times when the automatic data feed between servers has gotten
+#   bugged up for some reason and you want to manually feed the messages
+#   on when bringing things back up.
+#
+#   1.0.0   2001-09-07  TAV
+#           Initial implementation
+#
+#   2016-12-28  Todd Valentic
+#               Use datatransport package
+#
+############################################################################
+
+import  sys
+import  os
+import  StringIO
+import  string
+
+import  paths
+from    datatransport.NewsTool import NewsPoller,NewsPoster
+
+class RelayProcessor:
+
+    def __init__(self,srcServer,srcGroup,destServer,destGroup):
+
+        self.poller = NewsPoller()
+        self.poller.setServer(srcServer)
+        self.poller.setGroup(srcGroup)
+        self.poller.setProcessRaw(self.process)
+        self.poller.setDebug(1)
+
+        self.poster = NewsPoster()
+        self.poster.setServer(destServer)
+        self.poster.setGroup(destGroup)
+
+        self.poller.poll()
+
+    def stripHeaders(self,article):
+
+        ignoreHeaders = [   'Newsgroups','Lines','Path','Date','Message-ID',\
+                            'NNTP-Posting-Host','NNTP-Posting-Date',\
+                            'X-Trace','X-Complaints-To','Xref'  ]
+
+        response=[]
+        inBody=0
+        bodyLines=0
+
+        for k in range(len(article)):
+            line = article[k]
+            if inBody:
+                response.append(line)
+                bodyLines=bodyLines+1
+            elif string.strip(line)=='': 
+                inBody=1    
+                response.append(line)
+            else:
+                tokens = string.split(line,':')
+                if not tokens[0] in ignoreHeaders:
+                    response.append(line)
+
+        response.insert(0,'Lines: %d' % bodyLines)
+        response.insert(0,'Newsgroups: %s' % self.poster.groupHeader)
+
+        return response
+
+    def process(self,article,header):
+
+        strippedArticle = self.stripHeaders(article)
+        articleFile     = StringIO.StringIO(string.join(strippedArticle,'\n'))
+        response        = self.poster.postRaw(articleFile)
+
+        print 'Header =',header
+
+if __name__ == '__main__':
+    
+    if len(sys.argv)<5:
+        print 'Usage: relaynewsgroup srcServer srcGroup destserver destgroup'
+        sys.exit(1)
+
+    srcServer   = sys.argv[1]
+    srcGroup    = sys.argv[2]
+    destServer  = sys.argv[3]
+    destGroup   = sys.argv[4]
+
+    RelayProcessor(srcServer,srcGroup,destServer,destGroup)
+

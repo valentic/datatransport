@@ -1,0 +1,30 @@
+#!/usr/bin/env
+
+#####################################################################
+#
+#   Remove a news group
+#
+#   2016-12-26  Todd Valentic
+#               Use datatransport package
+#
+#####################################################################
+
+import sys
+import paths
+
+from datatransport import NewsTool 
+
+if len(sys.argv)<2:
+	print 'Usage: rmnewsgroup groupname'
+	sys.exit(1)	
+
+groupName 	= sys.argv[1]
+server		= NewsTool.NewsControl()
+
+if not server.groupExists(groupName):
+	print 'The group does not exist: %s' % groupName
+	sys.exit(1)
+
+print 'Removing %s' % groupName
+server.rmgroup(groupName)
+

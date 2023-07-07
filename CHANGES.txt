@@ -1,0 +1,1580 @@
+2020-08-21	Todd Valentic
+	- Rework signal handling at process startup. Prevents failure of
+	  imports that spawn processes before the default signal handling
+	  is restored for child processes (TransportManager)
+	- Release 2.0.122 
+
+2020-01-15	Todd Valentic
+	- Fix catchupReset handling NewsPollMixin and NewsTool
+	- Added isRunning() and isStopped() to AccessMixin
+	- Release 2.0.121 
+
+2020-01-08	Todd Valentic
+	- Add atStart support to ProcessClient wait(). Note that this will cause
+		the first call to short circuit and might have an impact on code that
+		handles atStart explicitly. 
+	- NewsPollMixin - make poll loop a generator for use cases where
+		pollers are part of a ConfigComponent 
+	- NewsPoller - add setLastReadPrefix()
+	- NewsPollMixin - set last read prefix if called from ConfigComponent
+	- Support python3 in configure.ac 
+	- Release 2.0.120
+
+2019-08-06	Todd Valentic
+	- Add timeout to XMLRPC request handler
+	- Allow None in XMLRPX server requests
+	- Release 2.0.119
+
+2019-04-14	Todd Valentic
+	- Use "/usr/bin/env python2" for shebang line instead of @PYTHON@
+	  which is replaced with the full path for the interpreter found when
+	  running config. This broke installations that were cross-compiled and is
+	  more standards compliant.
+	- Add configure --disable-defaultgroups to prevent installing the
+	  default process groups (used on embedded systems with different groups)
+	- Release 2.0.118
+
+2019-04-10	Todd Valentic
+	- Relax check requiring transport user exist in configure 
+	- Relax check requiring ctlinnd in configure
+	- Remove uid/gid from config file (compute at load)
+	- Add configure --disable-initd to turn off installing init.d script
+	- Add configure --disable-chown to turn off setting ownership at install
+	  These changes are to support installing transport in buildroot for
+	  cross compilation targets.
+	- Release 2.0.117
+
+2018-04-16	Todd Valentic
+	- Add validateFile to ArchiveGroups
+	- Release 2.0.116
+
+2018-01-16	Todd Valentic
+	- Update default line colors in PlotTool
+	- Release 2.0.115
+
+2017-12-06	Todd Valentic
+	- Rename ident() in XMLRPXMixin to avoid conflict with Threading
+	- Release 2.0.114
+
+2017-01-11	Todd Valentic
+	- Check for empty file groups in FilePost
+	- Release 2.0.113
+
+2017-01-10	Todd Valentic
+	- Fix XMLRPCServerMixin shutdown issue
+	- Release 2.0.112
+
+2016-11-08	Todd Valentic
+	- Make try..finally in TransportServer work on Python 2.4
+	- Fix XMLRPCServerMixin startup issue on Python 2.4
+	- Release 2.0.111
+
+2016-10-31	Todd Valentic
+	- Fix XMLRPXServerMixin change to work with Python 2.4
+	- Fix exclude change on NewsTool.listGroups exclude
+	- Release 2.0.110
+
+2016-07-07	Todd Valentic
+	- Python 2.6+ reworked the SocketServer handling of interrupts
+	  in select, which broke way we handled client signals for exit.
+      Reworked XMLRPC handling to not block.
+	- Make TransportServer multithreaded. Note that there are not
+	  checks for concurent access to critial code yet.
+	- Modified: ProcessClient, ProcessGroup, TransportServer,
+	  TransportManager and XMLRPCServerMixin
+	- Add subprocs member to ProcessClient. Used to terminate any
+		sub processes that have been spawned via popen in signal handler
+	- Release 2.0.109
+
+2015-12-01	Todd Valentic
+	- Use getRate() in postdatafiles
+	- Release 2.0.108
+
+2015-11-23	Todd Valentic
+	- Add md5 checksum header to PostDataFiles
+	- Release 2.0.107
+
+2014-02-16	Todd Valentic
+	- Add plot name as local config param when loading variables
+	- Release 2.0.106
+
+2014-01-17	Todd Valentic
+	- Add exclude list to NewsPoller and NewsTool listGroups()
+	- Release 2.0.105
+
+2013-08-18	Todd Valentic
+	- WatchURL: add date/time replacement in rename rules
+	- Release 2.0.104
+
+2013-05-27	Todd Valentic
+	- ArchiveGroups: include newsgroup name in working directory for
+		chunked messages. The potential existed to overwrite chunks
+		when there were messages with the same name but in different
+		newsgroups.
+	- Release 2.0.103
+
+2013-02-08	Todd Valentic
+	- Fix bug in EventMonitor when new Members were added to an existing
+	  configuration file
+	- Release 2.0.102
+
+2013-01-26	Todd Valentic
+	- Add _transportctl bash completion file in support 
+	- Fix attribute check in ArchiveGroups
+	- Add timeout to WatchURL 
+	- Check for port in directory service
+	- Release 2.0.101
+
+2013-01-14	Todd Valentic
+	- Fixed another bug in PlotTool (variables in multiple plot groups)
+	- Release 2.0.100
+
+2013-01-09	Todd Valentic
+	- Fixed typo in PlotTool that slipped in somehow (line 405)
+	- Release 2.0.99
+
+2012-11-08	Todd Valentic
+	- Add loadPlots() in PlotTool.py
+	- DefaultConfigParser - use custom interpolation for nested variables 
+	- DefaultConfigParser - return default only on NoOptionError
+	- Release 2.0.98
+
+2012-10-05	Todd Valentic
+	- Set port in NewsPostMixin
+	- Release 2.0.97
+
+2012-09-24	Todd Valentic
+	- Add atStart to getRate
+	- Add tools/listnewsgroups
+	- Release 2.0.96
+
+2012-05-20	Todd Valentic
+
+	- Added sql support to PlotTool
+	- Use external rrdtool in PlotTool
+
+	- Release 2.0.95
+
+2012-02-28	Todd Valentic
+
+	- ArchiveGroups
+		Check file access before chmod
+
+	- Release 2.0.94
+
+2012-02-10	Todd Valentic
+
+	- Cache value in PatternTemplate
+
+	- Release 2.0.93
+
+2011-08-28	Todd Valentic
+
+	- PlotTool: add hidden variables
+
+	- Release 2.0.92
+
+2011-07-16	Todd Valentic
+
+	- Update postarticle to allow text posting
+
+	- Release 2.0.91
+
+2011-06-28	Todd Valentic
+
+	- RealTimeFeed - fixed a problem where the modified message
+		was reused in process retry. Make sure to modify a copy
+		and leave the original alone.
+
+	- Release 2.0.90
+
+2011-03-11	Todd Valentic
+
+	- NewsgroupMonitor - add warning state
+
+	- Scheduler - add small delay
+
+	- Release 2.0.89
+
+2010-09-09	Todd Valentic
+
+	- ConfigComponent - correct mixin ordering
+
+	- PlotTool - variables now plotgroup aware
+			   - add area stack and line options
+			   - allow header checks per variable
+			   - use alpha shading for area colors
+
+	- plots.conf - Use * for defaults
+				 - Added colors
+				 - Set default area.alpha
+
+	- Release 2.0.88
+
+2010-08-16	Todd Valentic
+
+	- ConfigMixin	- add Rate object and getRate()
+					- add getTimeDelta()
+
+	- ProcessClient	- support Rate in wait()
+
+	- FilePost - new file watch (ConfigComponent based)
+
+	- configure now supports new /usr/libexec/news location
+
+	- Release 2.0.87
+
+
+2010-06-01	Todd Valentic
+
+	- PlotTool - add debug log entries to checkHeaders()
+
+2010-05-07	Todd Valentic
+
+	- TransportServer - make sure to return a value in addgroup()
+
+	- ArchiveGroups - reset message count if lowMark > lastRead
+
+	- NewsTool - reset messag count if lowMark > lastRead
+
+	- Release 2.0.86
+
+2010-03-22	Todd Valentic
+
+	- ConfigComponent - use prefix as "name" parameter in
+	  config files. The use of name is now deprecated and
+	  will eventually be removed.
+
+	- NewsgroupMonitor - add feedgroups, which work similar
+	  to the plotgroups in PlotTool.
+
+	- Release 2.0.85
+
+2010-03-02	Todd Valentic
+
+	- ConfigComponent - move position of mixins in lookup
+	  stack to be before the variable defaults.
+
+2010-02-23	Todd Valentic
+
+	- PlotTool - do not draw line when stacking plots
+
+	- Release 2.0.84
+
+2010-01-25	Todd Valentic
+
+	- Major reworking of the way processes are terminated. Now
+	  stop groups one by one, waiting until all processes are
+	  stopped before moving on. This wait ensures that the
+	  priority scheme works as exepcted. Before, the programs
+	  were all stopped in priority order, but we did not wait
+	  for completion, so a higher priority process might have
+	  exited before a lower priority one that depended on it.
+
+	- Running stop(), stopclient() and stopgroup() will block
+	  whereas they didn't before.
+
+	- ProcessClient no longer calls logout() in the signal
+	  handler (it can't because the signal is often sent in
+	  the stop call that is blocking).
+
+	- Added small delay in init script restart. We now cleanly
+	  can restart - something that has been broken for awhile.
+
+	- Release 2.0.83
+
+2010-01-19	Todd Valentic
+
+	- TransportServer and ProcessGroup - add start/stop priority
+
+	- Release 2.0.82
+
+2009-11-26	Todd Valentic
+
+	- NewsTool - added getContents()
+
+	- Release 2.0.81
+
+2009-11-24	Todd Valentic
+
+	- NewsGateway - use currentTime()
+	- PostDataFiles	- use currentTime()
+	- Scheduler - use currentTime()
+
+	- Release 2.0.80
+
+2009-11-23	Todd Valentic
+
+	- ConfigComponent - another lookup stack order fix.
+
+	- Release 2.0.79
+
+2009-11-13	Todd Valentic
+
+	- ConfigComponent - fixed lookup stack order problem
+		introduced by adding extra lookup ('*') on 2009-10-20
+
+	- Release 2.0.78
+
+2009-11-11	Todd Valentic
+
+	- Add reference PlotTool plots.conf file to support
+
+2009-11-09	Todd Vanentic
+
+	- PlotTool - allow separate plot rates for each period.
+
+	- Release 2.0.77
+
+2009-11-06	Todd Valentic
+
+	- Modify S61tansport to check for /testmode at start
+
+	- Release 2.0.76
+
+2009-10-20	Todd Valentic
+
+	- ConfigComponent - allow use '*' as default name
+	- ConfigMixin - add getList() and getSet()
+
+	- Release 2.0.75
+
+2009-09-14	Todd Valentic
+
+	- RealTimeFeed - raise ProcessRetry in case posting fails.
+
+	- Release 2.0.74
+
+2009-09-07	Todd Valentic
+
+	- TransportConfig - read other config files in etc
+
+	- Release 2.0.73
+
+2009-09-02	Todd Valentic
+
+	- PlotTool - add variable value filter options to remove
+	             non-numeric characters if needed.
+
+2009-08-24	Todd Valentic
+
+	- NewsTool - set socket timeout (default of 60 secs)
+
+	- Release 2.0.72
+
+2009-07-23	Todd Valentic
+
+	- NewsPostMixin - only check server if creating groups
+
+	- Release 2.0.71
+
+2009-06-18	Todd Valentic
+
+	- Fixed typo in NewsPostMixin
+
+	- Release 2.0.70
+
+2009-05-11	Todd Valentic
+
+	- Clean up older code for Python 2.6 compatability
+		- NewsTool.py - Remove MimeWriter usage
+		- WatchURL.py - Use hashlib
+		- ArchiveGroups.py - Use hashlib
+
+	- NewsTool.py - minor code cleanups.
+	- Require Python 2.4 or greater now (unoffical for awhile now)
+	- Use builtin set type instead of sets module (deprecated in 2.6)
+		- ProcessGroup.py
+		- PlotTool.py
+		- TransportServer.py
+
+	- Release 2.0.69
+
+2009-05-08	Todd Valentic
+
+	- Added EventMonitor component
+	- Added NewsgroupMonitor component
+
+	- Release 2.0.68
+
+2009-05-03	Todd Valentic
+
+	- Added path.exec to transportd.conf
+	- ProcessGroup and ProcessClient use path.exec for the
+	  default PATH setting
+	- Fix bug in SyncPoll processing (added params to _runPollers)
+	- Fix bug in NewsPollMixin for catchup.reset
+	- Fix bug in NewsTool setting email headers
+	- Add running property to ConfigComponent
+	- NewsPostMixin: use setattr()
+
+	- Release 2.0.67
+
+2009-04-28	Todd Valentic
+
+	- PlotTool: expanded plotgroup usage
+	- PlotTool: added header filtering
+	- ConfigComponent: better options() handling
+	- ConfigComponent: added mixin inheritance in config files
+
+	- Release 2.0.66
+
+2009-03-17	Todd Valentic
+
+	- Added xmlrpcdeferred to Util
+	- Added async option to DirectoryMixin
+	- Enabled use_datetime in DirtoryMixin connect()
+
+	- Release 2.0.65
+
+2009-02-09	Todd Valentic
+
+	- PlotTool: added plotgroups
+
+	- Release 2.0.64
+
+2009-02-04	Todd Valentic
+
+	- ArchiveGroups: Print trackback if exception is raised while
+	  parsing output.rules.
+
+	- ArchiveGroups: pass newsgroup in call to getFileTime()
+
+	- ConfigMixin: pass **kw to factory
+
+	- ConfigComponent: add localvars
+
+2009-01-30	Todd Valentic
+
+	- Added asDict to ConfigMixin.getComponents
+	- Tuned default line colors in PlotTool
+	- Refactored PlotTool to read plots, periods and variables at the
+	  top level
+
+2008-12-08	Todd Valentic
+
+	- Added support/transportd-debian
+		This file is the init.d startup file for Debian systems
+
+	- Make sure ResourceMonitor.py uses strings in ConfigParser
+		set() calls.
+
+	- Allow line.width in PlotTool.py to be a float
+
+	- InstrumentMonitor.py - make sure only strings are used in history
+
+	- Release 2.0.63
+
+2008-11-13	Todd Valentic
+
+	- Use SafeConfigParser instead of ConfigParser to better handle
+	  interpolation in config files. Changed in:
+
+	  DefaultConfigParser
+	  NewsTool
+	  Components/DiskMonitor
+	  Components/EventMonitor
+	  Components/InstrumentStatus
+	  Components/PlotTool
+	  Components/ResourceMonitor
+	  Components/TimePlot
+
+	- Add getFileTime() to ArchiveGroups to support timestamps in output
+	  filenames based on a time relevant to the file instead of the message.
+	  The use case is situations where we have multiple files attached that
+	  each have their own timestamp. Previously, we only did things based on
+	  the message timestamp. We probably need to rethink the entire archive
+	  organization to better reflect multiple files (the accounting sort of
+	  assumes on file per message).
+
+	- Release 2.0.62
+
+2008-11-10	Todd Valentic
+
+	- ProcessGroup: default group label and autostart (false)
+	- TransportServer: pass log to process group to record any
+	                   initial problems before group log is created.
+
+	- Release 2.0.61
+
+2008-08-26	Todd Valentic
+
+	- Add CDEF option to PlotTool variables
+
+	- Release 2.0.60
+
+2008-08-20	Todd Valentic
+
+	- Make NewsPollMixin's poll.rate.sync a boolean
+	- Make NewsPollMixin's poll.rate.offset a TimeDelta
+	- Add y.rigid option to PlotTool
+
+2008-08-19	Todd Valentic
+
+	- Only use basename when saving attached files in saveFiles().
+
+	- Release 2.0.59
+
+2008-08-18	Todd Valentic
+
+	- Fix yet another bug with the 2008-08-11 update. Only check
+	  the news server connection when there are actually groups
+	  to create.
+
+	- Release 2.0.58
+
+2008-08-15	Todd Valentic
+
+	- Rework waituntil() in Scheduler component to make sure that
+	  the target time is actually reached.
+
+	- Fix change in NewsTool.saveFiles() that added a path to
+	  all files, even if one wasn't specified (./ in that case).
+
+	- Release 2.0.57
+
+2008-08-14	Todd Valentic
+
+	- Fix another bug with the 2008-08-11 update. NewsPostMixin
+	  does not have access to self.running when used in with
+	  clients importing AccessMixin (this is really a bug with
+	  the way running is implemented, but that is a bigger change).
+
+	  - Release 2.0.56
+
+2008-08-12	Todd Valentic
+
+	- Yesterday's fix broke in the normal case when the network
+	  is OK at startup. Fixed.
+
+	- Release 2.0.55
+
+2008-08-11	Todd Valentic
+
+	- Make sure NewsPollMixin and NewsPostMixin can connect to
+	  the news server before continuing at start up.
+	- Add better log information in PlotTool.
+
+	- Release 2.0.54
+
+2008-07-18	Todd Valentic
+
+	- Print news group and server in NewPostMixin error messages.
+	- ArchiveGroups updates:
+		- more robust multipart message joining
+		- send trouble emails
+
+	- Release 2.0.53
+
+2008-06-07	Todd Valentic
+
+	- Added NewsGateway component
+
+	- Release 2.0.52
+
+2008-05-27	Todd Valentic
+
+	- Fixed off by one error in ArchiveGroups when using
+	  startCurrent and the news group only contained one
+	  message.
+
+2008-05-08	Todd Valentic
+
+	- Make sure to use basename for filename in PatternTemplate
+	  replacement in ArchiveGroups.
+
+2008-03-28	Todd Valentic
+
+	- Added transportd.conf param client.delay to stagger
+	  the client starts (ran into race condition problem
+	  in creating working directories on slow flash system).
+
+	- Release 2.0.51
+
+2008-01-06	Todd Valentic
+
+	- Fixed bug in NewsTool.saveFiles where the dest path
+	  was ignored for text-only messages.
+
+	- Release 2.0.50
+
+2007-10-17	Todd Valentic
+
+	- Handle cases in PlotTool when a CF other than AVERAGE
+	  was used.
+
+2007-09-18	Todd Valentic
+
+	- Changed the PlotTool extension to be .png. It changed
+	  with RRD 1.2 from .gif.
+
+	- Allow DirectoryService port to be set in config
+
+2007-08-08	Todd Valentic
+
+	- Fixed typo in InstrumentStatus news server parameter.
+
+2007-08-06	Todd Valentic
+
+	- Added history file posting to InstrumentStatus.
+
+	- Release 2.0.48
+
+2007-07-18	Todd Valentic
+
+	- Added modifyMessage() in ArchiveGroups component. This lets
+	  a derived class have access to the message body prior to
+	  processing. A common use is to inject the time headers.
+
+	- Added listFiles() and write flag to saveFiles() in NewsTool
+
+	- Release 2.0.47
+
+2007-07-14	Todd Valentic
+
+	- Scheduler component offset time was computed the wrong way.
+
+2007-04-14  Todd Valentic
+
+    - Set allow_none=True in DirectoryMixin connect() method.
+    - Only print log entry lines in viewlog at start up.
+    - Fixed crasher in newsPollers with catchup.reset
+    - Release 2.0.46
+
+2007-03-17  Todd Valentic
+
+    - Added ability to read config files in the path.group directory.
+    - Use os.path.sep
+
+2007-03-11  Todd Valentic
+
+    - Added ident() and introspection methods to TransportServer.
+    - Fixed console bug
+    - Released versoin 2.0.44
+
+2007-02-05  Todd Valentic
+
+    - Added catchup.reset to NewsPollMixin
+
+2006-11-20  Todd Valentic
+
+    - Added running property to Scheduler. Probably the wrong
+      place to add this. Should it be part of ConfigComponent?
+
+2006-10-26  Todd Valentic
+
+    - Added currentTime() and utc to ProcessClient
+      and AccessMixin
+
+2006-10-25  Todd Valentic
+
+    - Added sleep parameter to ProcessClient.wait().
+
+2006-10-20  Todd Valentic
+
+    - Only print connection message in DirectoryMixin
+        if waiting for service to start.
+
+2006-10-14  Todd Valentic
+
+    - Release version 2.0.41
+    - Make headers parameter to NewsTool.post* methods
+      a dictionary instead of a list.
+
+2006-10-05  Todd Valentic
+
+    - Added validMessage() to RealTimeFeed
+
+2006-09-30  Todd Valentic
+
+   - Fixed timegap reporting but in ArchiveGroups
+     when maxMessages=1.
+
+2006-09-15  Todd Valentic
+
+    - Add check in TransportServer expire() for quicker
+      shutdown (don't wait in missing processes).
+
+    - Make wait optional in DirectoryMixin connect().
+
+2006-07-27  Todd Valentic
+
+    - Import both rrdtool and rrdtoolmodule.
+
+2006-07-18  Todd Valentic
+
+    - Added saveHandler in ArchiveGroups to abstract out
+        the actual saving of files. This method can be
+        overridden in an inherited class to provide for
+        different methods of saving files (i.e. writing
+        to an HDF5 file format).
+
+    - Remove timestamp from subject line in news postings
+
+    - Extra headers were not being applied in postText
+
+    - Catch exceptions in XMLRPCServerMixin
+
+2006-07-07  Todd Valentic
+
+    - Add automatic dependency ordering to DirectoryMixin
+        connect() method.
+
+2006-06-14  Todd Valentic
+
+    - Use directory service to look up label description
+      for the ident() method in XMLRPCServerMixin.
+
+2006-06-01  Todd Valentic
+
+    - Added bin/tc and bin/console programs
+
+2006-05-31  Todd Valentic
+
+    - Added newsserver.port option to NewsPollMixin config.
+
+2006-05-09  Todd Valentic
+
+    - Added XMLRPCServerMixin and DirectoryServices
+
+2006-04-20  Todd Valentic
+
+    - Modify Makefile.am to create var and log files, plus set
+      the mode of groups to include g+s and g+w
+
+2006-02-09  Todd Valentic
+
+    - Added AccessMixin
+
+2006-02-07  Todd Valentic
+
+    - Make sure that NewsTool.messageDate always returns a datetime
+      object with a timezone. Default to UTC if it doesn't have one.
+
+2006-02-03  Todd Valentic
+    - Moved log files and working directories out of the group.home
+      space and into $TOP/log and $TOP/var. This is to keep the files that
+      are generated locally at run time separate from the group
+      configuration. That way when you want to work on a group and
+      back it up or install it, you just need to group the config
+      directory and don't have to manually clean out the files.
+
+    - Moved the server config (transportd.conf) into $TOP/etc
+
+    - Added support/migratedirs to help in migrating existing sites.
+
+2006-02-02  Todd Valentic
+    - PlotTool now creates output path if needed
+
+2006-01-18  Todd Valentic
+    - Code cleanup in Components/GroupControl
+    - Added exit() method to ProcessClient
+
+2005-12-21  Todd Valentic
+    - Catch up messages in NewsPoller if the lastid is less then
+      the first available message.
+    - Fixed bug in NewsPoller in the case the server was not ready.
+
+2005-11-30  Todd Valentic
+    - Show configuration files in ProcessGroup and Client debug logs.
+
+2005-11-12  Todd Valentic
+    - Pass through keywords for get() methods in ProcessClient.
+
+2005-11-08  Todd Valentic
+    - Modified viewlog to only sort on timestamps. This should
+      keep the lines in order (except for lines without times).
+
+    - Modified TransportServer to only return groups with clients
+      in the listgroups() method. This change will filter out the
+      directories that only have groups in them.
+
+    - Fixed install scripts for ServerMonitor cgi-bin images.
+
+2005-10-16  Todd Valentic
+    - Fixed bug in ArchiveGroups for time span/maxMessages.
+
+2005-09-20  Todd Valentic
+	- Added small extra delay in ProcessClient.wait() to make
+	  sure that we really are at the expected time.
+
+2005-08-12  Todd Valentic
+    - Modified ArchiveGroups to use maxMessages in time spans.
+
+2005-07-29  Todd Valentic
+    - Modify NewsPollMixin to support wild cards in group names
+    - Cleanup listGroups() in NewsTool
+
+2005-06-22  Todd Valentic
+    - Modified default PATH to be /usr/local/bin:/bin:/usr/bin
+    - Fixed log display for ServerMonitor
+
+2005-06-15  Todd Valentic
+
+    - Extended Util.PatternTemplate to handle dictionaries
+    - Fixed bug in NewsPoller (processPast)
+    - Added headers to pattern templates in ArchiveGroups
+    - Added options() to ConfigComponent
+
+2005-05-11  Todd Valentic
+
+    - Added the SyncPoller component
+    - Modified methods in NewsTool and NewsPollMixin to
+      support the ability to extract messages (used by SyncPoller)
+    - Added ability to set news server port in NewsTool
+
+2005-04-19  Todd Valentic
+
+    - Added Scheduler component
+
+2005-04-17  Todd Valentic
+
+    - Added put() to ProcessClient so clients can add
+      parameters to their configuration space.
+    - Added corresponding put() method to ConfigComponent.
+
+2005-04-10  Todd Valentic
+
+    - Added isRunning and isStopped methods to ProcessClient
+
+2005-04-07  Todd Valentic
+
+    - Added 'DD days, HH:MM:SS' for getDeltaTime formats.
+    - Added parse_deltatime method in Util.datefunc.
+
+2004-07-26  Todd Valentic
+
+    - Cleared environment in runprocess to match the one seen
+      when actually running as a transport process.
+
+    - Use configured username instead of default 'transport' in
+      runprocess
+
+    - Set HOME in TransportServer to be path.base
+
+2004-07-15  Todd Valentic
+
+    - Added new TimePlot component - uses postgresql and numarray
+    - Added TimeBins to Util (used in TimePlot)
+
+2004-04-04  Todd Valentic
+
+    - Removed code to figure out the hostname in configure.in and
+      just use the ac_hostname variable which is already defined.
+
+2004-02-26  Todd Valentic
+
+    - Modified NewsTool.py's saveFiles
+      method to handle non-multipart
+      messages.
+
+2004-02-10  Todd Valentic
+
+    - Added new ServerMonitor web interface.
+      Still needs to be cleaned up, don't
+      know if I like the tabs, but much
+      better then before!
+
+    - New ResourceMonitor component for
+      watching server resources like memory,
+      load and disk usage.
+
+    - Added ResourceMonitor client to the
+      ServerMonitor process group.
+
+    - Added check in PostDataFiles to avoid
+      compressing file if already compressed.
+
+    - Added max file size check to PostDataFiles.
+
+2004-02-08  Todd Valentic
+
+    - Use DeltaTime in ServerMonitor programs
+      rotatelogs.py and watchdog.py
+
+    - Cleaned up unused imports in TransportClient
+      and ProcessClient
+
+2004-02-01  Todd Valentic
+
+    - Added the ConfigComponent module and
+      the getComponents to ConfigMixin to
+      support generalized loading of
+      components in config files.
+
+    - Added texttable.py package to Utils
+
+    - Added DiskMonitor.py
+
+2003-08-28  Todd Valentic
+
+    - Changed install script to not recursively
+      set the ownership of the group directory.
+      Some groups (usually for CGI scripts) set
+      certain directories to other users and
+      these were being reset during install.
+
+    - Added "autostart" option to ./configure
+      to allow for setting of the initial
+      autostart value in the transportd.conf
+      file. This is useful for the test setups.
+
+2003-08-24  Todd Valentic
+
+    - Improved image name selection in WatchURL
+      by adding an exclude list and picking up
+      names in anchor tags.
+
+    - Changed PlotTool to use the newer pyrrdtool.
+
+2003-08-21  Todd Valentic
+
+    - Fixed bug in ArchiveGroups - when files were
+      opened for saving, they weren't closed before
+      the callback function was called.
+
+    - Fixed bug in NewsTool - wasn't handling news
+      groups list properly in processPast.
+
+    - ArchiveGroups now takes a DeltaTime object
+      for pollrate.
+
+    - ArchiveGroups now has option to not overwrite
+      output file if it already exists.
+
+2003-08-14  Todd Valentic
+
+    - Created ConfigMixin to hold high level get*
+      methods for config files. These are often
+      used in non-ProcessClient derived classes.
+
+2003-08-11  Todd Valentic
+
+    - Refined PlotTool
+    - Added multiple newgroup polling to NewsPollMixin
+
+2003-07-22  Todd Valentic
+
+    - Added PlotTool class and plottool component
+
+2003-07-01  Todd Valentic
+
+    - Cleaned up ArchiveGroups
+    - Made the default umask a config paramter
+    - Changed the default umask to 0002 from 0
+      which caused the directories to be created
+      rwx for all.
+
+2003-06-29  Todd Valentic
+
+    - Fix tools/Makefile.am to install rebuilddatabase
+    - Updates to ProcessClient and NewsTool
+    - Major change to NewsTool.NewsPoller - simplified
+      the callback interface to be only one function.
+      Removed the three processXXXX versions. This has
+      the unfortunate consquence that most polling
+      clients need to be updated!
+    - Updated files in doc (examples,python10) to new
+      NewsPoller interface
+    - Split components/RealTimeFeed into wrapper and
+      object like all the other components
+
+2003-06-20  Todd Valentic
+
+    - Added createDeltaTime to ProcessClient
+    - ProcessClient.wait() can now accept DeltaDateTime.
+    - Added callbacks to determine date in PostDataFiles.
+
+2003-06-11  Todd Valentic
+
+    - Added generic callback mechanism to ProcessClient.
+    - Added callback to ArchiveGroups.
+    - Converted InstrumentStatus callback to new scheme.
+    - Fixed compression detect bug in ArchiveGroups.
+    - Use email module for unpacking messages.
+    - Fixed a bug in realtimefeed which prevented relaying.
+
+2003-05-15  Todd Valentic
+
+    - Added timezone.py to Transport.Util
+
+2003-05-11  Todd Valentic
+
+    - Added callback plugins to InstrumentStatus. You
+      now write an external function and have it called
+      each time the instrument status is checked.
+
+2003-04-30  Todd Valentic
+
+    - Renamed init.d config scripts in support directory
+      to the actual names (transpotrd.init -> transportd
+      and omniORB.init -> omniORB).
+
+    - transportd was not being installed. fixed.
+
+    - omniORB init script now configured with omniORB
+      path if specified.
+
+    - added check for innd path in configure.
+
+2003-04-15  Todd Valentic
+
+    - Major cleanup of NewsTool.
+
+    - Removed a bunch of old, unused code:
+
+        - Util.hostname
+
+    - Added X-Transport-Date header to messages that specify
+      a date to NewsPoster posting methods.
+
+2003-02-15  Todd Valentic
+
+    - Added transportps to make it easy to list the running
+      transport processes.
+
+    - Improved catchup behaviour of NewsPoller. You can now
+      request the last few articels to start off instead of
+      just marking everything as read.
+
+2003-02-06  Todd Valentic
+
+    - Added a return value to wait() in ProcessClient. The
+      return is 0 or 1 indicating if the client is still
+      running. We can now write the main loop like:
+
+      while self.wait(rate):
+         ... do something ...
+
+      This construct assumes we want the wait to happen first.
+      Otherwise we would use a do..repeat like structure:
+
+      while self.running:
+        ...
+        if not self.wait(rate):
+            break
+
+2002-12-18  Todd Valentic
+
+    - Added a signal handler in TransportServer to ignore
+      SIGCHLD signals. This prevents zombie (defunct)
+      processes from hanging around after a program in a
+      process group has been stopped. This became a problem
+      after the change to spawnev() instead of system() for
+      starting child programs.
+
+    - Fixed filewatch to handle failed connections to the
+      news server during posting. It had been dying when
+      the load level was high and the news server throttled.
+      The other components should be examined for similar
+      failures.
+
+    - Changed the config file options for filewatch to be
+      more consistent (watch.*)
+
+2002-08-28  Todd Valentic
+
+    - Modified build/install system to use GNU autoconf.
+      Also added the ability to do parallel installs so
+      different versions could be run along side each
+      other.
+
+    - Changed sri.transport -> Transport (necessary for
+      the parallel install concept). The true path is
+      bootstrapped in the paths.py file.
+
+    - The Transport package is now local to the install
+      directory instead of the system's python path.
+
+    - Dropped the .py ending for the base components to
+      make them appear more as standalone programs:
+
+        archivegroups.py -> archivegroups.
+        filestore.py -> filestore
+        filewatch.py -> filewatch
+        groupcontrol.py -> groupcontrol
+        postdatafiles.py -> postdatafiles
+        realtimefeed.py -> realtimefeed.py
+
+    - Reorganized directory layout of package.
+
+    - Made a default, stripped down  ServerMonitor group.
+      Removed maillist, link tests and group control.
+      The instrument monitoring will go into a separate group.
+
+    - Removed web user functions from transportclt.
+
+    - With the transition to python2 we don't need to have a
+      local ConfigParser to fix the old bugs. Now use the
+      standard library version.
+
+    - Updated all the group files to match the new scheme.
+      Expect some problems during the transition, so watch
+      the logs closely.
+
+    - Removed the ServerMonitor from most groups since it
+      is part of the default install. The piece missing
+      was the old SystemMonitor, which has now been replaced
+      with InstrumentMonitor.
+
+    - Bug fixes to ArchiveGroups.
+
+
+
+2002-03-22  Todd Valentic
+
+    - Changed the internals of NewsPollMixin. It now adds
+      a method to the class: createNewsPoller() that can
+      be used as a factory to create NewsPoller objects.
+
+2002-03-04  Todd Valentic
+
+    - Added group.dirname to the base config file. This param
+      compliments the group.basename and is useful in deeply
+      layered process groups.
+
+    - Reorganized code in anticipation of trying to use distutils
+      for installation and distribution. This experiment will
+      be ongoing, so for now the old install.py script remains
+      the primary means of installing the files.
+
+2002-01-24  Todd Valentic
+
+    - Major cleanup of the NewsPollMixin and NewsPostMixin.
+      The change having the largest impact deals with the
+      renaming of a number of configuration parameters. Until
+      now, the parameters were a combination of styles. They
+      are now grouped under poll.* and post.* (and the prefix
+      can be user setable).
+
+    - Moved the groups directory entirely out of the core
+      transport distribution. I'll probably add back in a
+      minimal server monitor group once that has been rewritten
+      to be less site-specific.
+
+    - Renamed the NewsTool.NewsPoller processFunc() to be
+      processFiles() to reflect that it deals with file
+      attachments.
+
+2002-01-23  Todd Valentic
+
+    - Basic signal handling has been added to ProcessClient.
+      We catch TERM,INT,HUP to nicely shutdown client programs.
+      The same idiom was showing up in a number of clients, so
+      it makes more sense to move this behaviour up to the base
+      class.
+
+    - Added a traceback printing method for dumping errors to the
+      log. This routine will not only help in interpreting bugs
+      but lessen the need to have special "debug" code paths.
+
+    - Fixed some things in ArchiveGroups. The call to makedirs
+      needed to check if the path first existed and the signal
+      handling routines were removed since ProcessClient now
+      provides them.
+
+2002-01-22  Todd Valentic
+
+    - Found long-standing problem with supplemental groups.
+      The daemon option of transportd was not setting the
+      groups, they were being inherited by what ever user
+      was initially setting up the environment. We should
+      be using os.setgroups() to get the supplemental group
+      list, but this call is not available in python < 2.2.
+      The work around is to use the rc.transportd setup
+      script to start transportd as the transport user.
+      Once we require python 2.2, I'll go back to the older
+      method and properly call setgroup().
+
+    - Changed the way ArchiveGroups creates its output files.
+      You used to be able to give specifiy the group. Now,
+      I use the user private groups and sgid bit to control
+      access to the files and have removed excess code.
+
+2002-01-14  Todd Valentic
+
+    - Added summary report to ArchiveGroups.
+
+    - Consolidated the external python libraries (sri-*,pytav)
+      into single sri-base plus extensions for the different
+      data types (muscox,cedar,medac).
+
+    - Fixed bug in addgroup (NewsTools -> NewsTool).
+
+2001-12-10  Todd Valentic
+
+    - Changed the installgroup script to take a second argument
+      designating the destination directory prefix. You can now
+      install from a "versioned" directory like "cu-1.0.4" into
+      the base group "cu". This script is still just a quick hack
+      and needs to be fleshed out for the future.
+
+    - Moved the cedar and muscox python packages out of this
+      package and into their own since they are not really
+      transport related and specific to the Sondrestrom radar
+      processing.
+
+    - Improved signal handling and exit when ProcessClient.abort()
+      is called. Made self.running a data member of ProcessClient.
+
+    - Added uncompress ability to ArchiveGroups for automatically
+      decompress files when they are written to the archive.
+
+2001-12-03  Todd Valentic
+
+    - Fixed a bug in ArchiveGroups that keeps it from saving multipart
+      messages (introduced on 11-28 with change for text bodies). The
+      real change was to fix mimetool.py in sri/transport to handle
+      the saving of text messages.
+
+2001-12-02  Todd Valentic
+
+    - Changed the start/stop level of the transportd init.d script.
+      In the newer versions of redhat, it was being started before
+      innd, causing the process groups no end of grief. We now start
+      at 99, right at the end.
+
+2001-11-28  Todd Valentic
+
+    - Added date field to subject line in postText() method of NewsTool.
+    - Fixed NewsTool import in addgroup, rmgroup and cancelgroup scripts.
+    - Fixed ArchiveGroups.py to handle plain text (non-MIME) messages.
+
+2001-11-13  Todd Valentic
+
+    - Added debug mode to FitScan
+
+    - Moved sri.news python functions to sri.transport (we now
+      only have one spot for files).
+
+2001-10-23  Todd Valentic
+
+    - Rewrote ArchiveGroups to act as a general storage tool and
+      consolidate a number of scripts that all did similar things.
+
+    - Fixed bug in transportctl when chaning parameters for a user
+      with the "user set" methods. The parameters were being reset
+      to the default values each time.
+
+    - Added the notion of user roles to PageKit and the user database.
+
+2001-08-31  Todd Valentic
+
+    - Changed the way client programs are searched for when started
+      by ProcessGroup. Previously, the group appended the group's
+      home directory and anything defined by environ.path in the
+      config file to os.environ['PATH']. The problem is that each
+      ProcessGroup object still lives in the single TransportServer
+      process and they all ended up modifying the *same* PATH. When
+      you printed it out, it just kept getting longer and longer. It
+      also meant that groups would pick up executables from other
+      groups (often leading to problems if two groups had a similarly
+      named executable). The new method just declares a list of paths
+      to search and the executable is explicitly searched for. The
+      default path is /usr/bin, /bin, the group's home and then transport
+      server's bin (/home/transport/bin). Anything specified by the
+      environ.path config file entry is inserted after /bin and before
+      the group bin.
+
+2001-08-29  Todd Valentic
+
+    - Major changes to the way groups are installed. Groups can now
+      live in a heirarchy (arbitrarily deep). Each directory along
+      the path to the group can have it's own config file. Doing so
+      let's us finally move items out of the global config that are
+      really site specific.
+
+    - Changed the IDL spec to allow for a list of config files instead
+      of the global/local/host model used before.
+
+    - When you use transportctl with groups, you need to give the full
+      path for the group (ie ProcessDefault -> sri/ProcessDefault).
+
+    - I gutted the complicated install.py routines used by each group.
+      Now the top level install script simply copies the entire groups
+      directory up to /home/transport. Just create the layout that you
+      want locally and that is what will show up in the final install.
+
+    - The group directory changed from /home/transport/group to
+      /home/transport/groups. All of the tools were fixed to handle
+      this change.
+
+    - The web cgi scripts were modified to handle the changes.
+
+    - The ProcessGroup.py file was modified to include setting the
+      PATH environment variable prior to spawing process client commands
+      (so it can tell where they are).
+
+    - ProcessGroup.py and TransportServer.py were modified to handle
+      the new changes.
+
+    - The Installer.py script is depricated and will go away shortly.
+
+    - The naming of the config files used to be set in the global
+      config file. This has changed to a fixed format of <group>.conf
+      as was done in practice.
+
+2001-08-11  Todd Valentic
+
+    - Created summit/WeatherStation procress group to gather weather
+      and webcam images at the Greenland Summit Camp.
+
+    - Started to fixup filestore.py so that it better catches errors
+      during failures. Right now most of the os.system() call returns
+      are left unchecked and problems can silently slip by.
+
+    - Seems to be an odd problem that groups can see scripts in other
+      groups. I'm not sure how this is possible, but filestore is
+      accessible by non-FileStore client programs (this is actually
+      a desirable behavior and one I want to add, but in a controlled
+      manner!)
+
+2001-08-08  Todd Valentic
+
+    - Removed extra call to create groups in TransportServer.py. This
+      was outside of the try...except block and was responsible for
+      causing the server to crash on startup with a bad group was
+      encountered. This extra call was there from an earlier debugging
+      session and never removed. Opps.
+
+    - Updated the INSTALL file to reflect the changes needed for the
+      latest version of inn (2.3). A number of configuration files
+      are different and some extra steps are needed to get things
+      running. The changes are definitely for the better and allow
+      for finer control of who can post.
+
+2001-08-07  Todd Valentic
+
+    - Fixed a syntax errors in FileStore/filestore.py (NULL -> None).
+      I think I had started upgrading this file and then stopped.
+      Need to look closer to make sure it really still works.
+
+    - Updated ArchiveISR/archivegroups.py to have better error checking
+      and try to use library functions for directory creation instead
+      of shelling out with os.system() all the time. This let's us have
+      a better indication of when things fail and why.
+
+2001-02-19  Todd Valentic
+
+    - Renamed LinkBandwidth -> LinkThroughput in ServerMonitor.
+        This better reflects what is actually being estimated (the
+        time it takes to ftp a set-size file). I also incorporated
+        the BandwidthComputer object funcations directly and removed
+        the bandwidth.py file from the python/transport section.
+        (I also removed a duplicate in the tav python library).
+        This change also required updating the ServerMonitor.conf
+        file. LinkThroughput utilizes the timeoutsocket.py file, so
+        be sure to include it in the python path. I put it in
+        /usr/lib/python1.5/site-packages.
+
+        You can find the file at: www.timo-tasi.org/python/timeoutsocket.py
+
+2001-02-15  Todd Valentic
+
+    - Continued to add support for South Pole
+        o created ServerMonitor.conf-radar-2.spole.gov
+
+    - Fixed long standing problem in omninames rc startup script
+        Compound statment lines in bash needd a trailing ;
+        This used to work, but broke with RedHat 7.
+
+2001-02-05  Todd Valentic
+
+    - Added support for the South Pole installation:
+        o transportd.conf.in
+        o PageKit.py
+
+2000-11-16  Todd Valentic
+
+    - Added lidar archiving to ArchiveISR. This is only a temporary
+      addition. I'll soon create a separate AchiveLidar group to
+      handle the storage and post-processing checks.
+
+    - Changed to group-name pattern matching in archivegroups.py to use
+      the fnmatch module instead of regular-expressions. The filename
+      matching style is what I was really after in the first place.
+
+2000-10-26  Todd Valentic
+
+    - Added reportStart capability to systemstatus.py. This compliments
+      reportStop which had been intended to alert people when an
+      instrument had failed. It can now be used to notify people when
+      a specific instrument turns on or off.
+
+    - Added matching rules to filestore.py. This allows you to store
+      files into different directories for files in a single newsgroup.
+
+    - Added AllskyImager-Web to FileStore.conf-transport for storing
+      real-time imager files for web page.
+
+    - Created groups/sri/ArchiveISR and archivegroups.py.
+
+2000-10-24  Todd Valentic
+
+    - Added notify messages to ProcessAllsky group.
+    - Retooled notify.py to accept parameters in message files. This means
+      that all the notify.start and notify.stop messages were touched.
+    - Renamed the following directories in groups:
+
+         groups/processing -> groups/sri
+         groups/boulder -> groups/cu
+
+         to better reflect that they are SRI and CU related processing.
+
+    - Moved realtimefeed.py into the base/general/bin so that it can be
+      used by other process groups as a general service.
+
+    - Removed groups/base/FileStore/filestore.py's depedance on the
+      DateTime module. It now uses the standard time module instead.
+
+    - Changed the format of the output filename written by filestore.py.
+      The user now has complete control of the naming convention.
+
+2000-09-25  Todd Valentic
+
+    - Added sondrestrom.allsky to groups in transportd.conf.
+
+    - Fixed bug in transportctl - needed to import TransportModule.
+
+    - Added getartice tool to system/transport. Use this script to extract
+      an article from a newsgroup and unpack the files. I use this when
+      testing new processing routines and need to see the access posted files.
+
+2000-09-24  Todd Valentic
+
+    - Added the ProcessWorldDayLTCS group to the ISR processing groups
+      for the LTCS World Day campaigns (its a three-position, three minute
+      dwell mode).
+
+    - Fixed the gicwind.rps file in ProcessWorldDayWindy group. It was
+      looking for *.dt1 files (need to always look for *.mrg, even if
+      merging isn't being done).
+
+    - Fixed problem with transportctl's "reload server" command (was
+      failing because of an extra parameter. See transportctl for details).
+
+2000-09-14  Todd Valentic
+
+    - ProcessCME was sending data to the oersted newsgroups. Not a
+      problem, just caused the notification messages to appear that
+      they were coming from an Oersted run. Fixed the .conf file to
+      use *.cme.* groups.
+
+2000-08-08  Todd Valentic
+
+    - Fixed ServerMonitor config files for specific sites. I had
+      forgotten to add the maillist group, so the default was being
+      used instead.
+
+    - Fixed some small problems with transportctl. It would bomb out
+      it you didn't include all the necessary command line parameters
+      for some options.
+
+    - Fixed bug in system/web/cgi-bin/ViewTransportServer.py that kept
+      the log from being printed out.
+
+    - Fixed bug in system/web/cgi-bin/PreferencesForm.py that kept the
+      panel from showing up if no maillist groups were available.
+
+    - The install script was not correctly patching the PATHCGI setting
+      in transportd.conf.
+
+2000-07-20  Todd Valentic
+
+    - Added command line options for the install.py script.
+
+2000-07-14  Todd Valentic
+
+    - Added the webcam poster to Boulder's CatchAddress processing group.
+
+    - Added the ProcessCME-CJH group for Sondrestrom ISR processing of
+      CME events based on Craig Heinselman's new mode.
+
+    - Fixed problem with umimmak's config file for RealTimeFeed (the dt0
+      newgroup poll/post were reversed).
+
+2000-07-01  Todd Valentic
+
+    - Updated the path in system/omniorb/omninames to point to the
+      latest omniORB bin (i586_linux_2.0_glibc2.1). This is for a
+      RedHat 6.x system.
+
+    - Made some changes to the INSTALL notes.
+
+    - Added platteville, boulder and default to the transportd.conf file.
+
+    - Added platteville and boulder to site names in PageKit.py (only
+      a temporary kludge for now!)
+
+    - PageKit.py was not accessable to the cgi scripts. Moved back into
+      the cgi directory instead of sri.transport.
+
+    - Added platteville config files to base groups.
+
+    - The LinkBandwidth and LinkPlot programs in ServerMonitor should
+      not be started in a default configuration (the currently are).
+      Need to add some method of controlling which process group programs
+      are automatically started.
+
+    - Added webdir to install.conf.
+
+    - Patched web/html/startpage.shtml to point to webdir.
+
+    - Make ServerMonitor/systemstatus.py and serverstatus.py wait before
+      making tables so that the transport server can come up fully. The
+      initial tables were reporting problems that weren't really true.
+
+2000-06-21  Todd Valentic
+
+    - Reorganized the code directories. All of the processing groups now
+      live under "groups" and are split into the base components and the
+      SRI processing groups. The python scripts have moved into the python
+      directory. The system components, including the web interface, now
+      live in system.
+
+    - All of the components now use a python-based installer to install
+      their files. This approach allows for a common configuration file
+      to be used and hopefully everything should be retargetable to a
+      directory of your choice. There are still somethings that aren't
+      in there yet like the location of apache and ominORB.
+
+    - The configuration files for process groups were changed slightly.
+      There is now a host-specific configuration file that gets loaded
+      last (after the global transportd.conf and then the process group
+      config file). This allows most of the defaults for process group
+      to be combined into a single file and the specifics for different
+      sites to remain in the host config file. I'm still completely
+      happy with this approach because it means the standard distribution
+      is still littered with SRI-specific config files. I'm justifying
+      it right now by saying those specific files serve as examples
+      (and the only documentation of real-world use!)
+
+    - Started development website at transport.sri.com.
+
+2000-04-22  Todd Valentic
+
+    - Updated the spasms binaries to the latest release from Carol. The
+      only change that should impact us is the new acportgm program. New
+      fields were added to satisfy the request from the SuperDarn folks.
+      The new fields shouldn't impact anyone properly accessing the CEDAR
+      file.
+
+    - Changed the CORBA ORB from Fnorb to omniORB. This for a couple of
+      reasones:
+
+        o omniORB is a much more complete ORB (full POA, more services, etc)
+        o omniORB has C++ bindings in addition to Python
+        o omniORB is high performance
+        o Fnorb was leaking memory
+        o omniORB is actively developed; Fnorb seems to be dying away
+        o omniORB is GPL; Fnorb is proprietary
+        o omniORB is fully threaded; Fnorb had thread problems
+
+      The changes were minimal, and more pertained to the change from
+      using the BOA to the POA. Still need to do some stress testing,
+      especially since we are going threaded (I had kicked Fnorb back
+      into reactive mode).
+
+    - Added ProcessIris to accomodate the IRIS imager/magnetometer/riometer
+      instrument. This also led to a cleanup of the data center posting
+      code.

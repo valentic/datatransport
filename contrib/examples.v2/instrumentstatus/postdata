@@ -1,0 +1,56 @@
+#!/usr/bin/env python2
+
+###########################################################
+#
+#	PostData
+#
+#	A script to periodically post data messages into a 
+#	news group for testing purposes. The messages are
+#	posted at "post.rate" seconds during the "window.active"
+#	time. The sequence is repeated every "window.period"
+#	seconds.
+#
+#	1.0.0	2003-04-04	Todd Valentic
+#			Initial implementation
+#
+###########################################################
+
+from Transport import ProcessClient
+from Transport import NewsPostMixin
+from mx		   import DateTime
+
+import sys
+
+class PostData(ProcessClient,NewsPostMixin):
+
+	def __init__ (self,argv):
+
+		ProcessClient.__init__(self,argv)
+		NewsPostMixin.__init__(self)
+
+		self.rate		= self.getInt('post.rate',20)
+		self.active		= self.getInt('window.active',60)
+		self.period		= self.getInt('window.period',600)
+
+	def run(self):
+
+		self.log(1,'Period: %d' % self.period)
+		self.log(1,'Active: %d' % self.active)
+		self.log(1,'Rate:   %d' % self.rate)
+
+		while self.wait(self.period,sync=1):
+
+			stoptime = DateTime.now() + self.active*DateTime.oneSecond
+
+			while DateTime.now()<stoptime: 
+				self.newsPoster.postText('Hello')
+				self.log(1,'Posting')
+				if not self.wait(self.rate):
+					break
+
+			self.log(1,'Waiting')
+
+
+if __name__ == '__main__':
+	PostData(sys.argv).run()
+

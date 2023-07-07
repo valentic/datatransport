@@ -1,0 +1,51 @@
+Test Order
+----------
+
+environ
+    
+    Tests basic progess group functionality. 
+    Displays a the environment variables present
+    when the process starts up. Excercise the
+    setting of variables from within the config
+    file.
+
+getbytes
+
+    Tests the config file parsing of byte sizes
+    (B,kB,MB,etc).
+
+component
+
+    Test the ConfigComponent module.
+
+rotatelogs
+
+    Test log rotation. Starts multiple clients.
+
+spawn
+
+    Test ability to spawn external processes. 
+
+watchdog
+    
+    Test ServerMonitor's watchdog process to 
+    monitor and restart a crashed client.
+
+filewatch
+
+    Create small data files and post them to a 
+    news group. Tests NewsPoller functionality
+    and interaction with the news server. First
+    group with mutliple processes. Exercises 
+    the filewatch componnet.
+
+archivegroups
+
+    Test saving files using archivegroups. There are
+    multiple tests that are done (single file, multiple
+    files, uncompressing, history rolling, etc).
+
+wait
+
+    Test ProcessClient.wait() timing.
+

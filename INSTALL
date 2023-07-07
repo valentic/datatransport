@@ -1,0 +1,916 @@
+=============================================================================
+DATA TRANSPORT NETWORK INSTALLATION GUIDE
+=============================================================================
+
+:Author:    Todd Valentic
+:Contact:   todd.valentic@gmail.com
+:Revision:  2.5.0 
+:Date:      Aug 10, 2011
+
+.. contents::
+    :backlinks: none
+    :depth: 1
+
+1. Introduction
+=============================================================================
+
+This file contains the installation instructions for the Data Transport
+Network. The system consists of a number of different components that need
+to be installed and configured prior to using the transport network. You
+should install each of these software packages and test them first before
+installing the transport software.
+
+I primarily use Fedora Core systems for development, so most of these
+instructions will be geared toward that distribution. However, it should
+not take much to apply them to other distributions.
+
+I'm also a big fan of using ``sudo`` for root-level system
+administration. I don't like to log in as root because it reinforces a
+bad habit for inexperienced users. In this document, I'll preface the
+commands that need to be run as root with ``sudo``. You will need to
+make sure that your account has sudo privileges (hint, ``man visudo``).
+
+The transport system requires Python version 2.3 or higher. RPMs are
+available from http://www.python.org.
+
+Prerequisites:
+
+    ============  ====================================================
+    python 3.9+   (Fedora CD's or http://www.python.org)
+    innd 2.3+     (Fedora CD's or http://www.ics.org)
+    ============  ====================================================
+
+The general outline for installation is:
+
+  2.  Configure the innd news server
+  3.  Install the transport server
+  4.  Configure the news servers for server-to-server transfers
+  5.  What to do next
+
+2. Install and configure the news server (innd)
+=============================================================================
+
+The transport network uses the standard Network News Transport Protocol
+(NNTP) for transmitting data, and therefore it should be able to work
+with any of the major news servers. I have only tested and used the common
+INN sever from ISC (http://www.isc.org). There are RPM's available
+that make istallation a snap. We will need to modify some of the default
+configuration settings because moving a large data file around is a bit
+different from the normal news message traffic. A good (although
+somewhat dated) reference for Usenet and INN is available from O'Reilly:
+
+      "Managing Usenet"
+      By Henry Spencer & David Lawrence
+      1st Edition January 1998
+      1-56592-198-4
+
+2.1 Install INN
+---------------
+
+You will need to install the inn RPM's if you do not already have the
+install on the system. You can check using the following command::
+
+    > rpm -q inn
+    inn-2.3.5-11.1
+
+If you don't have it installed, you can do so using yum::
+
+    > sudo yum install inn
+
+This will pull in the inn and inews packages.
+
+Beginning with CentOS 6, inn is no longer included with the
+upstream distribution (RHEL). As of now, it is only in the
+PUIAS repo. Hopefully it will make it into EPEL soon. In the
+meantime, you can rebuild the RPM:
+
+   wget http://be.mirror.eurid.eu/puias/6.1/source/addons/inn-2.5.2-4.puias6.src.rpm
+   rpmbuild --rebuild inn-2.5.2-4.puias6.src.rpm
+
+   (you'll probably need to install some development RPMs - the output
+   of rpm build will tell. yum install them and try again).
+
+    sudo yum install rpmbuild/RPMS/x86_64/inn-2.5.2-4.el6.x86_64.rpm \
+        rpmbuild/RPMS/x86_64/inn-libs-2.5.2-4.el6.x86_64.rpm \
+        rpmbuild/RPMS/x86_64/inews-2.5.2-4.el6.x86_64.rpm
+
+    sudo mkdir /var/run/news
+    sudo chown news:news /var/run/news
+
+
+2.2 Edit /etc/news/inn.conf
+---------------------------
+
+You will then need to change some of the configuration parameters to
+match the nature of the articles posted in the transport network. In
+particular, you need to make sure that large articles can be posted
+(the default is to reject articles larger then 1Mb). The two parameters
+that control this are maxartsize and localmaxartsize. Setting them to
+0 allows any sized article to be posted. However, sending very large
+messages (100Mb and larger) can cause problems, so it is a good idea
+still set a limit. Here we set the limit to 50Mb::
+
+    organization:       Data Transport Network
+    maxartsize:         50000000
+    localmaxartsize:    50000000
+
+2.3 Allow reader (client) access to the news server
+---------------------------------------------------
+
+We next need to allow access to the news server by any client machines
+for reading and posting messages. The file that controls this access
+is ``readers.conf``.
+
+Edit ``/etc/news/readers.conf``
+
+There are two different sections to this file (auth and access).
+You begin by creating an authentication group that defines which hosts
+can connect.  In the access section you describe which news groups these
+authenticated hosts can access and what they can do (read/post). We will
+create a transport related access group and let it read and post the
+``transport.*`` and ``control.*`` groups.  The machines given in the the
+``nnrp.access`` example above will be used (change these to match your
+own configuration)::
+
+    # Allow access to the transport groups
+
+    auth "transport" {
+        hosts: "meteor.sri.com, 192.101.148.*, *.sri.com"
+        default: "<transport>"
+    }
+
+    access "transport" {
+        users: "<transport>"
+        newsgroups: "*"
+    }
+
+
+You will also need to add the 'N' option to localhost access
+features.  The default is "RPA". Change this to be "RPAN". The N
+allows local readers to do execute the ``newnews`` command, which
+the transport system uses to check for new messages::
+
+    access "localhost" {
+        users: "<localhost>"
+        newsgroups: "*"
+        access: RPAN
+    }
+
+
+2.4 Set the article storage method
+----------------------------------
+
+With inn 2.3, there is a new file which controls the method used to store
+articles on the disk. I have been using the ``tradspool`` method out of
+convenience (each message is stored in a single file under a directory
+hierarchy similar to the news group name). It would probably be good to
+experiment with the other methods, especially if the amount of message
+traffic becomes large. The default file installed by the news server
+does not have a storage method defined, so you need to pick one.
+
+Edit /etc/news/storage.conf::
+
+    method tradspool {
+        class: 1
+        newsgroups: *
+    }
+
+
+2.5 Edit /etc/news/control.ctl
+------------------------------
+
+Messages will be posted to groups in the ``transport.*`` hierarchy. I
+allow client programs to be able to automatically add and remove the
+news groups they need. On a real usenet server, this is highly undesirable
+since people could abuse the system. In our case, however, we know
+exactly what programs are posting and can let them have greater control.
+To allow newgroup/rmgroup control messages for the ``transport.*`` groups,
+add the following lines to control.ctl in the section labeled with the
+comments ``NEWGROUP/RMGROUP MESSAGES``.
+
+Changed default newgroup/rmgroup action to log::
+
+    newgroup:*:*:log=newgroup
+    rmgroup:*:*:log=rmgroup
+
+Then add these lines following the defaults::
+
+    ## Added for Data Transport Network
+    newgroup:*:transport.*:doit=newgroup
+    rmgroup:*:transport.*:doit=rmgroup
+
+The above lines will process the add and remove group control messages,
+as well as log the requests. You can therefore scan the logs to see
+what happened.
+
+2.6 Shorten expire time from 10 days to 2 for all messages
+----------------------------------------------------------
+
+**This section is optional**.
+
+When you are ready to have the transport system pump a lot of data,
+you'll begin to accumulate a large number of files. At Sondrestrom,
+we found that clearing out messages after two days provided enough
+short-term storage to make sure everything was processed and sent.
+You can fine tune the expirations to take place on specific groups
+or part of the tree.
+
+In ``/etc/news/expire.ctl``, set the default expiration times to::
+
+    *:A:1:2:never
+
+
+2.7 Quiet down the logging messages
+-----------------------------------
+
+The ``/var/log/news/news.notice`` file will grow to tens of MB's over a few
+days time because all of the newsreader accesses are logged. For readers
+polling with an interval of a few seconds, this message traffic results
+not only in large log files, but also causes syslogd to hog the processor.
+
+Because the logging information is routed through syslogd, the actual
+mechanism used to tune what is written is not found in the innd
+configuration files, but instead is in ``/etc/syslog.conf``. Changing
+the line::
+
+    news.notice        /var/log/news/news.notice
+
+to::
+
+    news.=notice       /var/log/news/news.notice
+
+keeps most of the messages (which appear to be of priority info?) from
+showing up. During debugging you will probably want to keep the
+original setting so you can see exactly what is happening. You'll need
+to restart the syslog subsystem for these changes to take effect::
+
+    > sudo /sbin/service syslog restart
+
+
+2.8 Create initial databases
+----------------------------
+
+You will need to run the makehistory and makedbz commands to create
+the initial history database. These commands are located in
+``/usr/lib/news/bin``::
+
+    > cd /usr/libexec/news/bin
+    > sudo -u news ./makehistory
+    > sudo -u news ./makedbz -i -o
+
+These commands should be run as the ``news`` user, otherwise the files
+that they create will have the wrong owner and inn will misbehave since
+it cannot modify the files. If you run the commands as root, make sure
+to change the ownership on these files::
+
+    > sudo chown news:news /var/lib/news/history.*
+    > sudo chown news:news /var/spool/news/tradspool.map
+
+
+2.9 Enable innd to start automatically at boot up
+-------------------------------------------------
+
+If this is a production machine, you will want inn to start automatically
+at boot up. The exact means of doing this will depend on which
+distribution you are using, but in general will involve setting some
+links in ``/etc/rc.d``. Use the ``chkconfig`` program to set these links::
+
+    > sudo /sbin/chkconfig innd on
+
+You check to see which run levels it is enabled for with::
+
+    > /sbin/chkconfig --list innd
+
+On newer distributions that use systemd, run::
+
+    > sudo systemctl enable --now innd
+    > sudo systemctl enable --now innd-expire.timer
+    > sudo systemctl enable --now innd-rnews.timer
+
+
+2.10 Start up innd
+------------------
+
+You are now ready to start innd::
+
+    > sudo /sbin/service innd start
+
+You should see an ``ok`` message printed out. To check if the server
+started, look for the innd process::
+
+    > ps -ef | grep innd
+      news      4169     1  0 18:32 ?        00:00:00 /usr/bin/innd -p4
+
+See if you can connect to the server. It runs on port 119 of the local host::
+
+    > telnet localhost 119
+    Trying 127.0.0.1...
+    Connected to localhost.localdomain.
+    Escape character is '^]'.
+    200 meteor.sri.com InterNetNews server INN 2.3.1 ready
+
+Type ``LIST`` and press enter to send a group listing command to
+the server. You should see a list of groups returned::
+
+    LIST
+    215
+    control 0000000000 0000000001 n
+    control.cancel 0000000000 0000000001 n
+    control.checkgroups 0000000000 0000000001 n
+    control.newgroup 0000000000 0000000001 n
+    control.rmgroup 0000000000 0000000001 n
+    junk 0000000000 0000000001 n
+    .
+
+Type ``QUIT`` to close the connection::
+
+    QUIT
+    205 .
+    Connection closed by foreign host.
+
+2.11 Enable posting to control groups
+-------------------------------------
+
+Ensure that you have the ability to post to the control news groups.
+You do this with the ctlinnd program's changegroup option. The location
+of ctilinnd is ``/usr/lib/news/bin/ctlinnd``.
+
+    cd /usr/libexc/news/bin
+    (cd /usr/libexec/news on centos 6+)
+
+    sudo ./ctlinnd changegroup control y
+    sudo ./ctlinnd changegroup control.cancel y
+    sudo ./ctlinnd changegroup control.checkgroups y
+    sudo ./ctlinnd changegroup control.newgroup y
+    sudo ./ctlinnd changegroup control.rmgroup y
+
+Note - if you have SELinux running, you may run into a problem where the innd deamon is blocked from sending to
+the socket used by ctlinnd (see bugzilla 2132153). You need to create a policy with:
+
+    allow innd_t unconfined_t:unix_dgram_socket sendto;
+
+    sudo ausearch -c 'innd' --raw | audit2allow -M my-innd
+    sudo semodule -i my-innd.pp
+
+
+    By hand:
+
+        my-innd.te
+
+            module my-innd 1.0;
+
+            require {
+              type unconfined_t;
+              type innd_t;
+              class unix_dgram_socket sendto;
+            }
+
+            allow innd_t unconfined_t:unix_dgram_socket sendto;
+
+        checkmodule -M -m -o my-innd.mod my-innd.te
+        semodule_package -o my-innd.pp -m my-innd.mod
+        sudo semodule -i my-innd.pp
+
+    On EL9, this module is slightly different:
+
+        module my-innd2 1.0;
+
+        require {
+            type innd_t;
+            type unconfined_service_t;
+            class unix_dgram_socket sendto;
+        }
+
+        #============= innd_t ==============
+        allow innd_t unconfined_service_t:unix_dgram_socket sendto;
+
+    
+Note - SELinux is also blocking access to /bin/su, which is needed in shutting down the service.
+       Cascaded to also need map access, allow root authentication, and run xauth. 
+       Found rootok solution here:
+       https://superuser.com/questions/1608829/how-to-get-su-to-work-in-init-scripts-in-red-hat-8-with-selinux
+
+    allow init_t su_exec_t:file { execute execute_no_trans open read };
+
+    sudo ausearch -c 'su' --raw | audit2allow -M my-su
+    sudo semodule -i my-su.pp
+
+    By hand:
+
+        module my-su 1.0;
+
+        require {
+            type su_exec_t;
+            type init_t;
+            type xauth_exec_t;
+            class file { execute execute_no_trans open read map };
+            class passwd rootok;
+        }
+
+        #============= init_t ==============
+        allow init_t su_exec_t:file { execute execute_no_trans open read map };
+        allow init_t self:passwd rootok;
+        allow init_t xauth_exec_t:file execute;
+
+    checkmodule -M -m -o my-su.mod my-su.te
+    semodule_package -o my-su.pp -m my-su.mod
+    sudo semodule -i my-su.pp
+
+Note - selinux preventing expire timer service from running (news.daily)
+
+2.12 Cleanfeed
+--------------
+
+The cleanfeed package monitors incoming postings for spam. If it
+detects a large number of common postings, it will reject them.
+Under normal conditions, this feature is a great way to protect your
+newsfeeds. Unfortunately, the methods used by the transport system fool
+cleanfeed into thinking it is under a spam attack. There are a large
+number of identical postings with similar headers posted periodically
+to the same news groups.
+
+If you see ``437 EMP`` rejection notices in the news log files, you have
+cleanfeed running and is dropping messages due to "Excessive multiple
+postings."
+
+To disable the checking, you need to execute the following command::
+
+    > sudo ctlinnd perl n
+
+This command disabled the perl (cleanfeed) filter checking. This command
+will need to be run each time the new server is restarted.  It is run
+as part of the transport server start script.
+
+2.13 Test the news server
+-------------------------
+
+You should now be able to point your news reader at the server machine
+and post/read articles. Check the log files in ``/var/log/news`` to see
+the activity. Here are the different log files and what they record:
+
+    +-----------------+----------------------------------------------+
+    | ``news.crit``   | Critical errors that keep the server from    |
+    |                 | running. Look here first if you are having   |
+    |                 | problems just getting started.               |
+    +-----------------+----------------------------------------------+
+    | ``news.err``    | Non-critical errors detected by the news     |
+    |                 | server such as not having permission to post.|
+    +-----------------+----------------------------------------------+
+    | ``news.notice`` | General status messages from the server.     |
+    |                 | Look here to see your connection activity.   |
+    +-----------------+----------------------------------------------+
+
+
+3. Install the transport network
+=============================================================================
+
+The final step in getting the transport network up and running is to
+unpack and install the network code. An autoconf/automake based install
+system has been added to help simplify this step.
+
+3.1  Unpack the tarball
+-----------------------
+
+The distribution comes bundled in a gzipped tarball. Unpack it with the
+following commands::
+
+    > tar zxvf transport-x.y.z.tgz   (where x.y.z is the version)
+    > cd transport-x.y.z
+
+3.2 Create the transport user
+-----------------------------
+
+You will want to run the transport system under a non-root account.
+The best thing to do is to create a ``transport`` user account for this
+sole purpose::
+
+    > sudo /usr/sbin/adduser transport
+
+On a Fedora system, this will also create a group named transport.
+
+
+3.3  Run the configure script
+-----------------------------
+
+You can set a number of options in the configure script. Running
+``configure`` with ``-h`` will display these::
+
+    > ./configure -h
+
+    .....
+
+    Optional Packages:
+        --with-PACKAGE[=ARG] use PACKAGE [ARG=yes]
+        --without-PACKAGE    do not use PACKAGE (same as --with-PACKAGE=no)
+        --with-username      specify a user name other than "transport"
+        --with-groupname     specify a group name other than "transport"
+        --with-hostport      server listens on this port (default is 8081)
+        --with-umask         specify a umask (default is 0002)
+        --with-hostname      specify a different hostname
+        --with-sitename      short, single word site name ("default")
+        --with-sitedesc      description of the site location ("Default site")
+        --with-ctlinnd       path to the ctlinnd program
+
+
+The first options that are dislayed are just boilerplate for the
+autoconf-based systems. The local options show up down in the "Optional
+Packages" section.  There are a few that you will want to set, such as
+the site name and description.
+
+Here's a setup for a typical installation::
+
+    > ./configure   \
+        --with-sitename=sondrestrom \
+        --with-sitedesc="Sondrestrom, Greenland"
+
+The ``sitename`` should be a short, single word (it is used in the news
+group names), where as the ``sitedesc`` can be more verbose.  It is used
+in headings and reports.
+
+
+3.4  Make and install the files
+-------------------------------
+
+Next, run the ``make`` and ``make install`` commands to create the files
+and install the files::
+
+    > make
+    > sudo make install
+
+By default, the system will be installed into /opt/transport. A service
+startup script will also be placed into ``/etc/rc.d/init.d/transportd``.
+
+If you are running on a Debian system, you will need to manually
+copy the apporpriate startup file:
+
+    > sudo cp support/transportd-debian /etc/init.d/transportd
+
+3.5  Setup the web interface
+----------------------------
+
+The transport network comes with a process group that can be used to
+monitor the system's status through a web browser. You need to
+configure your web server to be able to run the CGI scripts. I assume
+that you are using Apache as the web server and that the transport
+network was installed into ``/opt/transport`` (the default location).
+
+3.5.1 Create the conf.d directory if needed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you are running a release of Redhat prior to 8.0, you will need
+to do the following steps to setup Apache to read config files in
+the ``conf.d`` directory:
+
+Add the following line to ``/etc/httpd/conf/httpd.conf``::
+
+    Include conf.d/*.conf
+
+And then make the directory ``/etc/httpd/conf.d``::
+
+    > sudo mkdir /etc/httpd/conf.d
+    > sudo chown apache:apache /etc/httpd/conf.d
+
+We can now simply drop new configuration files into conf.d, restart
+apache and have it automatically read the new updates.  We won't need
+to edit any more files when adding new pieces to the transport network.
+
+3.5.2 Install the servermonitor config file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > cd /opt/transport/groups/ServerMonitor/cgi-bin
+    > sudo cp transport-servermonitor.conf /etc/httpd/conf.d
+
+If you are interested in seeing what is being added to apache, take a
+look at the servermonitor.conf file. It contains standard apache commands
+to setup an alias to direct ``/transport/servermonitor`` requests to the
+CGI scripts.
+
+3.5.3 Restart apache so it reads the new configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > sudo /sbin/service httpd restart
+
+
+3.6  Set the transport network to automatically start
+-----------------------------------------------------
+
+Use the ``chkconfig`` program to enable the transport service to
+automatically start when the machine reboots::
+
+    > sudo /sbin/chkconfig --add transportd
+    > sudo /sbin/chkconfig transportd on
+
+For Debian systems:
+
+    > sudo /usr/sbin/update-rc.d transportd defaults
+
+3.7  Startup the network
+------------------------
+
+Once the system in installed, you can start it up using the init
+script. You should have the new server, web server and omniORB name server
+running at this time. The init script is ``transportd`` and resides with
+the other startup scripts. Start the network by running the command::
+
+    > sudo /sbin/service transportd start
+
+3.8 Log files
+-------------
+
+The transport server and each process group will create log files to let
+you know what is happening. I've written a small program named ``viewlog``
+that will continually display the logs (it simply tails the filename). To
+view the server log::
+
+    > /opt/transport/bin/viewlog
+
+To see the log for a process group such as the ``ServerMonitor``::
+
+    > /opt/transport/bin/viewlog ServerMonitor
+
+3.9  Test the system
+--------------------
+
+The transport network includes a command line tool to perform a number
+of tasks. You can query the system, start and stop processing groups and
+manage the web users with it. The name of the command is ``transportctl``
+and it is in the bin directory of the transport network. This defaults
+to ``/opt/transport/bin``. You might want to add this to your ``PATH``
+variable (the following examples assume that you have).
+
+3.9.1  To get a list of the available commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > transportctl help
+
+
+3.9.2  Try to communicate with the transport server
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > transportctl status
+    Server status: Nominal
+
+It will take the transport server a bit of time to start all of the
+groups. During this time the server will be not be listening for outside
+requests. You might get a message complaining about not being able to
+connect to the server if the server has just been started. Wait a bit
+and try again.
+
+3.9.3  Query the transport server for process groups
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > transportctl list
+    There is 1 group registered:
+    1 groups are registered:
+           ServerMonitor - Monitor transport server operations
+
+3.9.4  Query a process group about it's processes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+::
+
+    > transportctl list ServerMonitor
+    There are 2 clients listed for the group ServerMonitor
+    Watchdog ['Process watchdog monitor', 26189]
+    ResourceMonitor ['Monitor system resources', 16182]
+
+3.9.5  Test the web interface
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+At this point, you should be able to go to the web interface for
+the server monitor group and see the information as reported by the
+``transportctl`` output. The web page is accessible on the local
+server at:
+
+    http://127.0.0.1/transport/servermonitor
+
+You can view the news groups used by the transport system as well as the
+different programs (called process groups) that are being run.
+
+4. Getting servers to talk with each other (Optional)
+=============================================================================
+
+You might not need to do anything for this step. It is only if you have
+two news servers that are going to transmit data to each other. An
+example is the server we have in Sondrestrom that sends data to the
+server in Menlo Park on an hourly basis::
+
+
+           Instruments    Sondrestrom         Menlo Park
+                        umimmak.srpo.gl    transport.sri.com
+
+                          -----------         ----------
+           o------------>|           |       |          |
+           o------------>|           |------>|          |
+           o------------>|           |       |          |
+                          -----------         ----------
+
+                          Upstream            Downstream
+                           Server               Server
+
+4.1 Edit /etc/news/newsfeeds (on upstream server)
+-------------------------------------------------
+
+Add the following lines::
+
+    ## Added for Data Transport Network
+    ME:!*/!local::
+    transport.sri.com:!*,transport.*,control,!control.cancel::
+
+The ME line ensures that no default actions will be taken
+The transport line says to feed only the transport and control
+groups onto the server named ``transport.sri.com`` (this would be
+the file at a remote site feeding the server in Menlo Park).
+We also exclude the ``control.cancel`` group so that any cancel
+messages are kept to the local machine.
+
+Here is the current line for Sondrestrom::
+
+    transport.sri.com\
+        :!*,\
+        transport.*,\
+        !transport.sondrestrom.isr.binaries.dt*,\
+        !transport.sondrestrom.isr.binaries.*.fit,\
+        !transport.sondrestrom.isr.binaries.*.dtcpair,\
+        !transport.sondrestrom.allsky.binaries.data.images,\
+        control,!control.cancel\
+        ::
+
+4.2 Edit ``/etc/news/nntpsend.ctl`` (on upstream server)
+--------------------------------------------------------
+
+Add the following lines to ``/etc/news/nntpsend.ctl``::
+
+    # Added for Data Transport Network
+    transport.sri.com:transport.sri.com::
+
+These bind the description of the messages to send (transport.sri.com in
+``/etc/news/newsfeeds``) with an actual server address. I usually make
+the name in newsfeeds the same as the server, although you don't actually
+need to.
+
+
+4.3 On downstream server, edit ``/etc/news/incoming.conf``
+----------------------------------------------------------
+
+Add the following lines to allow the upstream server access::
+
+    # Added by for the transport network
+
+    peer umimmak.srpo.gl {
+        hostname: umimmak.srpo.gl
+    }
+
+Note that ``umimmak.srpo.gl`` would be the hostname of the upstream
+server.
+
+
+4.4 The files to be sent will be listed in ``/var/spool/news/outgoing``
+-----------------------------------------------------------------------
+
+A file will be created for each downstream host and the article
+path/number listed inside. It appears that only articles posted after
+the above files have been edited will be sent on. I'm not sure how to
+get the system to scan all the stored articles as a primer.
+
+The actual transmission is done using the nntpsend program. This script
+is a wrapper around innxmit and is called once an hour as a cron job
+from ``/etc/cron.hourly/inn-cron-nntpsend``.
+
+To increase the transmission speed between servers, you'll need to bump
+the cron job up to run every five minutes or so. The fastest is once a
+minute. An alternative method is to use the ``Real-Time Feed`` component
+bundled with the the transport system.  This program will monitor
+news groups on one server and relay the messages to another server as they
+come in.  This method is nice because you can individually control which
+streams are sent quickly while maintaining the normal server transfer
+functions in the cron process.
+
+4.5 Create news groups on the downstream server
+-----------------------------------------------
+
+You will need to create the news groups on the downstream server to
+hold the messages coming from the upstream server. Use the ctlinnd
+program to do this::
+
+    > cd /usr/lib/news/bin
+    > sudo ./ctlinnd newgroup <newsgroupname>
+
+
+5. What to do next
+=============================================================================
+
+Unfortunately, I have yet to write the user documentation that you need
+to really add new components to the system. You can look at the base
+and processing groups to see how they work. More to come!
+
+
+6. Document Revision History
+=============================================================================
+
+1.0.0   2000-06-15   Todd Valentic
+        - Initial release.
+
+1.0.1   2000-07-02   Todd Valentic
+        - Updated omniORB install section.
+        - Updated the tav python library install section.
+
+1.0.2   2001-02-06    Todd Valentic
+        - Fixed some typos.
+
+1.0.3   2001-08-08      Todd Valentic
+        - Updated info on installing newer inn version (2.3). A number of
+          things have changed since inn 2.2!
+
+1.0.4   2001-09-07      Todd Valentic
+        - Updated info on server->server transfers.
+
+1.0.5   2001-11-19      Todd Valentic
+        - Added notes about cleanfeed in the inn setup section.
+
+1.0.6   2001-11-28      Todd Valentic
+        - Added note about rpm version of pytav libraries.
+
+1.0.7   2001-12-17      Todd Valentic
+        - Rewrote python library section to include needed libraries
+          and install of python2.
+        - Added section on addition software.
+
+1.0.8   2002-02-14      Todd Valentic
+        - Added note regarding permissions of /home/transport
+
+1.0.9   2002-02-15      Todd Valentic
+        - Fixed mistake about python2 build - need src rpm.
+
+1.0.10  2002-03-13      Todd Valentic
+        - Changed note in Apache config section: Need to restart server
+          not reload.
+        - Added sparc package to SRI python module list.
+
+1.0.11  2002-09-03      Todd Valentic
+        - Updated to reflect new structure for release 0.9.9
+        - Update build instructions for omniORB4.
+        - Require python2.
+        - Add note about N option to localhost in readers.conf
+
+1.0.12  2003-03-03      Todd Valentic
+        - Updated notes for Red Hat 8.0
+        - Removed installation of programs and libraries not
+          needed for the core transport install (descriptions
+          of these should be in the appropriate process groups).
+        - Removed and reorganized some sections.
+        - Added note about sudo.
+        - Improved formatting.
+
+1.0.13  2003-05-29      Todd Valentic
+        - Updated notes about installing onto a fresh Redhat 9 system.
+        - We mention Numeric as a requirement, but it isn't used by
+          any of the base packages. Remove?
+        - mx DataTime rpms now are part of the Redhat distribution.
+
+1.0.14  2003-06-20      Todd Valentic
+        - Numeric extensions are not needed by the base install. Removing
+          as a requirement and description of installation.
+
+1.0.15  2003-08-26      Todd Valentic
+        - Notes about using the omniORB rpm's.
+        - Need to install RRDTool and PyRRDTool
+
+1.0.16  2004-04-04      Todd Valentic
+        - Update inn.conf configuration. Set message limits and use
+          the control channel.
+
+1.0.17  2004-05-22      Todd Valentic
+        - Added note about making omniNames executable for rpm install.
+        - Use default port for omniName service (2809).
+
+1.0.18  2004-12-09      Todd Valentic
+        - Fixed type in readers.conf setting "news groups" -> "newsgroups"
+
+1.0.19  2005-03-10      Todd Valentic
+        - Updated to new XMLRPC version of code.
+        - Remove COBRA sections
+        - Remove older INN setup instructions.
+
+1.0.20  2005-04-16      Todd Valentic
+        - Fixed typo in tradspool setup (thanks to Matt Posey)
+
+1.0.21  2005-11-18      Todd Valentic
+        - Fixed typo in section 2.3 (news reader client).
+        - Default location is /opt/transport
+
+1.0.22  2008-12-08      Todd Valentic
+        - Add notes about installing on Debian
+
+1.0.23  2010-05-17      Todd Valentic
+        - Fixed typo

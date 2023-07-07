@@ -1,0 +1,7 @@
+
+	Multi Poll Test
+
+	Test the mulitple newsgroup polling feature of the NewsPollMixin.
+
+	Each writer posts to a different newsgroup. The reader polls
+	each group and prints the messages to the log.

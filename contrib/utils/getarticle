@@ -1,0 +1,88 @@
+#!/usr/bin/env python
+
+#####################################################################
+#
+#	GetArticle
+#
+#	This script can be used to extract messages from a news group.
+#	It can be run in a one shot or loop mode.
+#
+#	History:
+#
+#	1.0.0	2003-02-24	Todd Valentic
+#			Initial implementation.
+#
+#	1.0.1	2004-02-17	Todd Valentic
+#			Updated to new callback format.
+#
+#   1.0.2   2006-02-03  Todd Valentic
+#           Removed reference for setVerbose.
+#           
+#   2016-12-26  Todd Valentic
+#               Use datatransport package
+#
+#####################################################################
+
+from datatransport import NewsTool 
+
+import 	sys
+import	time
+
+class Processor:
+
+	def __init__(self,server,group,catchup,oneshot):
+
+		self.done=0
+		self.oneshot=oneshot
+
+		poller = NewsTool.NewsPoller()
+		poller.setServer(server)
+		poller.setGroup(group)
+	
+		poller.setCallback(self.process)
+		poller.setSingleShot(oneshot)
+
+		if catchup:
+			poller.markRead()
+
+		while not self.done:
+			poller.poll()
+			if not self.done:
+				time.sleep(10)
+
+	def process(self,message):
+		filenames = NewsTool.saveFiles(message)
+		print 'Received files:',filenames
+		if self.oneshot:
+			self.done=1
+
+if __name__ == '__main__':
+
+	usage = 'Usage: getarticle server group [--catchup] [--oneshot]'
+
+	if len(sys.argv)<3:
+		print usage 
+		sys.exit(1)
+
+	catchup = '--catchup' in sys.argv
+	if catchup:
+		sys.argv.remove('--catchup')
+
+	oneshot = '--oneshot' in sys.argv
+	if oneshot:
+		sys.argv.remove('--oneshot')
+
+	if len(sys.argv)<3:
+		print usage 
+		sys.exit(1)
+
+	server	= sys.argv[1]
+	group	= sys.argv[2]
+
+	print 'Server:  ',server
+	print 'Group:   ',group
+	print 'One shot:',oneshot
+	print 'Catchup: ',catchup
+
+	Processor(server,group,catchup,oneshot)
+

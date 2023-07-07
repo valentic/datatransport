@@ -1,0 +1,151 @@
+==========================================================================
+Migrating from version 2.x to 3.x (python2 -> python3)
+==========================================================================
+
+* Now installs as a standard python package into a virtual environment.
+  This replaces the autotools installation. You now first install the 
+  package and then create an application instance:
+
+    2.x
+        ./configure
+        make
+        make install
+
+    3.x
+        python3 -m venv venv
+        . venv/bin/activate
+
+        pip install datatransport
+
+        export DATA_TRANSPORT_PATH=/opt/transport
+        transport-create-app -d $DATA_TRANSPORT_PATH
+
+* Name of the package changed from Transport to datatransport
+
+    from Transport -> from datatransport
+
+    Transport.Components -> datatrasnport.components
+    Transport.Util -> datatransport.util
+
+* utilities makePath 
+
+    No longer accepts group
+    Can supply name as a pathlib object
+    Change to snake case make_path
+
+* utilities removeFile
+
+    Can use pathlib object and byte array in addition to string
+    Change to snake case removeFile -> remove_file
+
+* utilities sizeDesc
+
+    Rewritten implementation
+    Now can use metric (1000) or binary (1024)
+    Exapand results range
+    Change to snake case sizeDesc -> size_desc
+
+* utilities datefunc
+
+    Rewritten implementation
+    Most code now can use built in methods
+    Use pytimeparse2 to parse timedelta strings
+
+* utilities pattertemplate
+
+    setValue -> set_value
+
+* accessmixin
+
+    removed isRunning and isStopped. Use running propoery instead.
+    currentTime -> current_time
+
+* processclient
+
+    currentTime -> current_time
+    loadConfig -> load_config
+    setupSignals -> setup_signals
+    setupEnvironment -> setup_environment
+    setupLog -> setup_log
+    setupWorkingDir -> setup_working_dir
+    signalHandler -> signal_handler
+    findConfigFiles -> find_config_files
+
+* newspollmixin
+
+    runStep -> run_step
+    newsPollers -> news_pollers
+
+    config changes:
+        atStart -> at_start
+        exitOnError -> exit_on_error
+
+* newspostmixin
+
+    createNewsPoster -> _poster_create 
+    newsPoster -> news_poster
+
+* newstool 
+
+    getContents -> get_contents
+    saveFiles -> save_files
+    listFiles -> list_files
+    messageDate -> message_date
+    asConfig -> as_config
+    
+    NewsTool
+        setServer -> set_server
+        setGroup -> set_newsgroup
+        setLog -> set_log
+        setTimeout -> set_timeout
+        openServer -> open_server
+        groupExists -> group_exists
+        datetime -> get_datetime
+        listArticles -> list_articles
+        listGroups -> list_newsgroups
+        groupExists -> has_newsgroup 
+
+        serverName -> server_host
+
+    NewsPoster
+        setGroup -> set_newsgroup
+        clearHeaders -> clear_headers
+        setSubject -> set_subject
+        setFrom -> set_from
+        setEnable -> set_enabled
+        setHeader -> set_header
+        clearHeaders -> clear_headers
+        addHeaders -> add_headers
+        addFile -> add_file
+        postRaw -> post_raw
+        postFile -> post_file
+        postFiles -> post_files
+        postText -> post_text
+
+    NewsControl
+        postCommand -> post_command
+        cancelMessage -> cancel_message
+        cancelGroup -> cancel_newsgroup
+
+    NewsPoller
+        setCallback -> set_callback
+        setDebug
+        setSingleShot
+        setRetryWait
+        setStopFunc
+        setLastReadPrefix
+        defaultStop
+        defaultCallbacl
+        lastReadFilename
+        saveLastRead
+        loadLastRead
+        markRead
+        callProcessing
+        processArticle
+        markMessageRead
+        processPast
+        getArticle
+        getNextMessage
+
+    
+    

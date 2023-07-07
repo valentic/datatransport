@@ -1,0 +1,78 @@
+#!/usr/bin/env python
+
+#####################################################################
+#
+#	CreateNewsgroup
+#
+#	This script creates a newsgroup on the news server.
+#
+#	1.0.0	2002-03-04	Todd Valentic
+#			Initial implementation
+#
+#	2016-12-25  Todd Valentic
+#	            Use datatransport package
+#
+#####################################################################
+
+from datatransport import NewsTool
+
+import sys
+import time
+
+def main(groupName):
+
+	server = NewsTool.NewsControl()
+
+	if server.groupExists(groupName):
+		print 'The group ("%s") already exists!' % groupName
+		return 0	
+
+
+	print 'Creating group on server'
+
+	server.newgroup(groupName)
+
+	sys.stdout.write('Waiting for group to show up: ')
+	sys.stdout.flush()
+
+	totaltime 	= 0
+	waittime	= 10
+	maxtime		= 120
+
+	wheel		= ['-','/','|','\\']
+	curpos		= 0
+
+	sys.stdout.write('%s' % wheel[curpos])
+	sys.stdout.flush()
+
+	while not server.groupExists(groupName) and totaltime<maxtime:
+
+		for x in range(waittime):
+
+			sys.stdout.write('\b%s' % wheel[curpos])
+			sys.stdout.flush()
+			curpos = (curpos+1) % len(wheel)
+
+			time.sleep(1)
+			totaltime = totaltime+1
+
+	print '\b%d secs' % totaltime
+
+	if server.groupExists(groupName):
+		print 'Create has been created'
+		return 1	
+	else:
+		print 'Timeout waiting for group to be created'
+		return 0	
+
+if __name__ == '__main__':
+
+	if len(sys.argv)<2:
+		print 'Usage: creatnewsgroup groupname'
+		sys.exit(1)	
+	
+	if main(sys.argv[1]):
+		sys.exit(0)
+	else:	
+		sys.exit(1)
+

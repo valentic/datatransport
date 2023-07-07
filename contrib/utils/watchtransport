@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+
+##########################################################################
+#
+#   Monitor new posts to local news groups based on file creation in
+#   the news server spool directory. In addition, details on file
+#   attachments and multi-part data transport posts are shown. The
+#   files are monitored based on the Linux kernel inotify subsystem.
+#
+#   To speed up start up, the news groups are cached. To monitor any
+#   newly created groups, start with the -u (--update) parameter.
+#
+#   2013-06-15  Todd Valentic
+#               Initial implementation.
+#
+##########################################################################
+
+import argparse
+import email
+import logging
+import pathlib
+import os
+import sys
+
+try:
+    import pyinotify
+except:
+    logging.error('Requires the pyinotify package')
+    sys.exit(1)
+
+__author__ = 'todd.valentic@gmail.com (Todd Valentic)'
+__version__ = '1.0'
+
+class EventHandler(pyinotify.ProcessEvent):
+
+    def my_init(self,log=None,**kw):
+        self.log=log
+
+    def process_IN_CLOSE_WRITE(self,event):
+        info = os.stat(event.pathname)
+        path = event.pathname.split('transport',1)[1]
+
+        contents = open(event.pathname).read()
+        message = email.message_from_string(contents)
+
+        details = '(%s bytes' % info.st_size
+
+        try:
+            filename = message['x-transport-filename']
+            details = details+', '+filename
+        except:
+            pass
+
+        try:
+            part = message['x-transport-part']
+            details = details+', '+part
+        except:
+            pass
+
+        details = details+')'
+
+        self.log.info('%s %s' % (path,details))
+
+def SetupLogging():
+    log = logging.getLogger('transportwatch')
+    format = logging.Formatter('[%(asctime)s %(name)s %(levelname)s] %(message)s')
+    handler = logging.StreamHandler()
+    handler.setFormatter(format)
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
+    return log
+
+def RebuildCache(args):
+
+    paths = []
+
+    for root,dirs,filenames in os.walk(args.spool):
+        paths.append(root)
+
+    args.cache.parent.mkdir(parents=True, exist_ok=True) 
+    args.cache.write_text('\n'.join(paths))
+
+    return paths
+
+if __name__ == '__main__':
+    
+    log = SetupLogging()
+    parser = argparse.ArgumentParser(
+                description="Display transport newsserver activity"
+             )
+
+    parser.add_argument('-v','--verbose',action='store_true',
+                      help='Verbose mode')
+    parser.add_argument('-V','--version',action='store_true',
+                      help='Show version')
+    parser.add_argument('-s','--spool',default='/var/spool/news/articles/transport',
+                      help='Spool path')
+    parser.add_argument('-c','--cache',default='~/.cache/watchtransport',
+                      help='Directory cache (speeds startup)')
+    parser.add_argument('-u','--update',action='store_true',
+                      help='Update cache')
+
+    args = parser.parse_args()
+
+    if args.verbose:
+        log.setLevel(logging.DEBUG)
+
+    if args.version:
+        print(__version__)
+        sys.exit(0)
+
+    wm = pyinotify.WatchManager()
+    notifier = pyinotify.Notifier(wm,EventHandler(log=log))
+    mask = pyinotify.IN_CLOSE_WRITE
+
+    paths = []
+
+    args.cache = pathlib.Path(args.cache).expanduser().joinpath('tracker')
+
+    if args.update or not args.cache.exists():
+
+        log.info('Building directory cache')
+        paths = RebuildCache(args)
+
+    else:
+
+        log.info('Loading directory cache')
+        paths = args.cache.read_text().split('\n')
+
+    for path in paths:
+        log.debug('Watching %s' % path)
+        wm.add_watch(path, mask, auto_add=True)
+
+    log.info('Ready')
+    notifier.loop()
+
+    sys.exit(0)
+

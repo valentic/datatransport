@@ -1,0 +1,36 @@
+#/bin/sh
+
+#####################################################################
+#
+#   Rebuild the inn overview and histroy database
+#
+#####################################################################
+
+PATH=$PATH:/usr/lib/news/bin:/usr/libexec/news/bin
+
+echo "Stopping newsserver"
+/etc/rc.d/init.d/innd stop
+
+echo "Removing old overview database"
+rm -r /var/spool/news/overview/*
+
+echo "Rebuilding history"
+su news -c "makehistory -b -O"
+
+echo "Rebuilding dbz"
+su news -c "makedbz -i -o"
+
+echo "Starting newsserver"
+/etc/rc.d/init.d/innd start
+
+echo "Waiting to newserver to start"
+sleep 3
+
+echo "Renumbering active file"
+ctlinnd renumber  ""
+
+echo "Disabling perl checking"
+ctlinnd perl n
+
+echo "Finished"
+

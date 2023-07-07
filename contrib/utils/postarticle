@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+#####################################################################
+#
+#   Post a message to a news group
+#
+#   2016-12-26  Todd Valentic
+#               Use datatransport package
+#
+#####################################################################
+
+import  sys
+import  paths
+import  optparse
+from    datatransport.NewsTool import NewsPoster
+
+class Processor:
+
+    def __init__(self,options,group):
+
+        self.options = options
+
+        self.poster = NewsPoster()
+        self.poster.setServer(options.server)
+        self.poster.setGroup(group)
+
+    def post(self,filenames):
+
+        print 'Posting files:',filenames
+
+        if self.options.text:
+            self.poster.postText(open(filenames[0]).read())
+        else:
+            self.poster.post(filenames)
+
+if __name__ == '__main__':
+
+    usage = '%PROG newsgroup file(s)'
+    parser = optparse.OptionParser(usage=usage)
+
+    parser.add_option('-s','--server',dest='server',default='localhost',
+                        help='news server')
+
+    parser.add_option('-t','--text',dest='text',default=False,
+                        action='store_true',
+                        help='post as text instead of attachment')
+
+    (options,args) = parser.parse_args()
+
+    if len(args)<2:
+        parser.error('Not enough arguments')
+        sys.exit(1)
+
+    newsgroup   = args[0]
+    files       = args[1:]
+
+    Processor(options,newsgroup).post(files)
+
