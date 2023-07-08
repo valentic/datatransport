@@ -43,7 +43,7 @@
 #               Updated for transport3 / python3
 #               Add recursive and parent options
 #               Handle mulitple groups/clients
-#               Make sure output is always time ordered 
+#               Make sure output is always time ordered
 #
 ##########################################################################
 
@@ -78,6 +78,7 @@ class FileTracker:
         """Reopen the file in case it closes (i.e.log rotation)"""
 
         try:
+            # pylint: disable=consider-using-with
             stream = open(self.name, "r", encoding="utf-8")
             stats = os.stat(self.name)
         except:  # pylint: disable=bare-except
@@ -176,7 +177,7 @@ class Tail:
         for spec in specs:
             path = Path(spec)
             groups.append(path)
-            groups.extend([p for p in path.parents][: self.args.parents])
+            groups.extend(list(path.parents)[: self.args.parents])
 
         watch = set()
 
@@ -194,6 +195,8 @@ class Tail:
         return watch
 
     def update_trackers(self, trackers, paths):
+        """Update current log file trackers"""
+
         result = {}
 
         for path in paths:
