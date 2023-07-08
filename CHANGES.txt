@@ -1,3 +1,14 @@
+2023-07-08  Todd Valentic
+    - Major update to viewlog (parents and recursive views) 
+    - Release 3.0.4
+
+2023-07-07  Todd Valentic
+    - Initial public release of transport3
+    - Python3 port
+    - Updates all over the tree
+    - Extract config into standalone sapphire-config pacakge
+    - Release 3.0.3
+
 2020-08-21	Todd Valentic
 	- Rework signal handling at process startup. Prevents failure of
 	  imports that spawn processes before the default signal handling
