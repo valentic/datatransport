@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""Data Transport log viewer"""
 
 ##########################################################################
 #
@@ -29,7 +30,7 @@
 #   2.0.3   2007-04-14  Todd Valentic
 #           Only print log entry lines (those starting with "[")
 #               at start to avoid printing part of an traceback.
-#               
+#
 #   2016-12-23  Todd Valentic
 #               Use datatransport package format
 #               Use print()
@@ -38,10 +39,15 @@
 #               Move into datatransport/commands
 #               Convert from optparse -> argparse
 #
+#   2023-07-07  Todd Valentic
+#               Updated for transport3 / python3
+#               Add recursive and parent options
+#               Handle mulitple groups/clients
+#               Make sure output is always time ordered 
+#
 ##########################################################################
 
 import argparse
-import glob
 import os
 import signal
 import sys
@@ -51,16 +57,17 @@ from pathlib import Path
 
 from datatransport import TransportConfig
 
+
 class FileTracker:
+    """Track view for a given file"""
 
-    def __init__(self,name):
-
-        self.name       = name
-        self.file       = None
-        self.size       = 0
-        self.inode      = 0
-        self.dev        = 0
-        self.firsttime  = True
+    def __init__(self, name):
+        self.name = name
+        self.file = None
+        self.size = 0
+        self.inode = 0
+        self.dev = 0
+        self.firsttime = True
 
         self.n_unchanged_stats = 0
         self.n_consecutive_size_changes = 0
@@ -68,33 +75,34 @@ class FileTracker:
         self.reopen()
 
     def reopen(self):
+        """Reopen the file in case it closes (i.e.log rotation)"""
 
         try:
-            file  = open(self.name)
+            stream = open(self.name, "r", encoding="utf-8")
             stats = os.stat(self.name)
-        except:
-            self.file  = None
+        except:  # pylint: disable=bare-except
+            self.file = None
             self.inode = 0
-            self.dev   = 0
+            self.dev = 0
             return
 
         self.n_unchanged_stats = 0
         self.n_consecutive_size_changes = 0
 
-        if self.inode!=stats.st_ino or self.dev!=stats.st_dev:
-            self.inode  = stats.st_ino
-            self.dev    = stats.st_dev
-            self.size   = 0
-            self.file   = file
+        if self.inode != stats.st_ino or self.dev != stats.st_dev:
+            self.inode = stats.st_ino
+            self.dev = stats.st_dev
+            self.size = 0
+            self.file = stream
 
             if self.firsttime:
                 offset = 500
-                self.firsttime=False
-                self.size = max(stats.st_size-offset,0)
+                self.size = max(stats.st_size - offset, 0)
             else:
                 self.size = 0
 
     def poll(self):
+        """Poll files for changes"""
 
         if not self.file:
             self.reopen()
@@ -102,25 +110,25 @@ class FileTracker:
 
         try:
             stat = os.stat(self.name)
-        except:
+        except:  # pylint: disable=bare-except
             self.file = None
             return None
 
-        if self.size==stat.st_size:
-            self.n_unchanged_stats+=1
-            self.n_consecutive_size_changes=0
-            if self.n_unchanged_stats>5:
+        if self.size == stat.st_size:
+            self.n_unchanged_stats += 1
+            self.n_consecutive_size_changes = 0
+            if self.n_unchanged_stats > 5:
                 self.reopen()
             return None
 
-        self.n_unchanged_stats=0
-        self.n_consecutive_size_changes+=1
+        self.n_unchanged_stats = 0
+        self.n_consecutive_size_changes += 1
 
-        if self.n_consecutive_size_changes>200:
+        if self.n_consecutive_size_changes > 200:
             self.reopen()
             return None
 
-        if self.size>stat.st_size:
+        if self.size > stat.st_size:
             self.reopen()
             return None
 
@@ -128,95 +136,149 @@ class FileTracker:
         data = self.file.read()
         self.size = self.file.tell()
 
-        return data
+        if self.firsttime:
+            self.firsttime = False
+            if not data.startswith("\n") and "\n" in data:
+                # Start at a newline
+                data = data.split("\n", 1)[1]
+
+        return data.rstrip()
+
 
 def parsedate(line):
-    return line.split(']')[0][1:].rsplit(' ',1)[0].strip()
+    """Get date field in line"""
+    return line.split("]")[0][1:].rsplit(" ", 1)[0].strip()
+
 
 class Tail:
+    """Display the last lines of a groups of files"""
 
-    def __init__(self,filenames):
+    def __init__(self, args):
+        self.rate = 0.5
+        self.args = args
+        self.verbose = args.verbose
+        self.specs = args.groups
+        self.config = TransportConfig()
+        self.trackers = {}
 
-        self.rate   = 0.5
-        self.trackers  = [FileTracker(f) for f in filenames]
+        self.logpath = self.config.get_path("DEFAULT", "path.logfiles")
+
+        path = self.config.get_path("TransportServer", "log.file")
+        self.serverlog = path.relative_to(self.logpath)
+
+    def scan_groups(self, specs):
+        """Scan for log files"""
+
+        logfiles = [p.relative_to(self.logpath) for p in self.logpath.glob("**/*.log")]
+
+        groups = []
+
+        for spec in specs:
+            path = Path(spec)
+            groups.append(path)
+            groups.extend([p for p in path.parents][: self.args.parents])
+
+        watch = set()
+
+        for group in groups:
+            if str(group) == ".":
+                watch.add(self.serverlog)
+                if self.args.recursive:
+                    watch.update(logfiles)
+                continue
+            if self.args.recursive:
+                watch.update([p for p in logfiles if p.match(f"{group}/**/*.log")])
+            watch.update([p for p in logfiles if p.match(f"{group}/*.log")])
+            watch.update([p for p in logfiles if p.match(f"{group}.log")])
+
+        return watch
+
+    def update_trackers(self, trackers, paths):
+        result = {}
+
+        for path in paths:
+            key = str(path)
+            if key in trackers:
+                tracker = trackers[key]
+            else:
+                tracker = FileTracker(self.logpath.joinpath(path))
+
+            result[key] = tracker
+
+        return result
 
     def run(self):
-        
-        # Print the last 10 lines or so of each file. Sort the lines
-        # to put in time order.
+        """Print the last 10 lines of each file, sort by time"""
 
-        lines = []
+        paths = self.scan_groups(self.specs)
 
-        for tracker in self.trackers:
-            output = tracker.poll()
-            if output:
-                for line in output.split('\n')[1:][-10:]:
-                    if line.startswith('['):
-                        lines.append(line)
-
-        lines.sort(key=parsedate)
-
-        for line in lines:
-            print(line)
+        if self.verbose:
+            print("=" * 75)
+            print(f"Looking in {self.specs}")
+            if self.args.parents is None:
+                print("Parents: all")
+            else:
+                print(f"Parents: {self.args.parents}")
+            print(f"Total lots: {len(paths)}")
+            for path in paths:
+                print(path)
+            print("=" * 75)
 
         # Tail forever
 
         while True:
+            self.trackers = self.update_trackers(self.trackers, paths)
 
-            for tracker in self.trackers:
+            lines = []
+            for tracker in self.trackers.values():
                 output = tracker.poll()
-                if output:
-                    print(output.strip())
+                if not output:
+                    continue
+
+                if output.startswith("["):
+                    output = "\n" + output
+
+                for entry in output.split("\n["):
+                    if entry:
+                        lines.append("[" + entry)
+
+            if lines:
+                lines.sort(key=parsedate)
+                print(*lines, sep="\n")
 
             time.sleep(self.rate)
 
 
-def display (args):
-
-    if args.group:
-
-        defaults =  {   'group.name':       args.group,
-                        'group.basename':   os.path.basename(args.group),
-                        'group.dirname':    os.path.dirname(args.group)
-                    }
-
-        config  = TransportConfig(defaults)
-        logpath = Path(config.get('DEFAULT','log.path'))
-        logfiles = list(logpath.glob('*.log'))
-
-        if args.client:
-            logfiles = [fn for fn in logfiles if Path(fn).stem in args.clients]
-
-    else:
-        logfiles = [TransportConfig().get('TransportServer','log.file')]
-
-    if not logfiles:
-        print('No log files found')
-        return
-
-    print()
-    print('Watching:')
-    for filename in logfiles:
-        print('  %s' % filename)
-    print()
-
-    Tail(logfiles).run()
-
-def handler(signum,frame):
+def handler(_signum, _frame):
+    """Signal handler"""
     sys.exit(0)
 
+
 def main():
+    """Main application"""
 
-    signal.signal(signal.SIGINT,handler)
+    signal.signal(signal.SIGINT, handler)
 
-    usage   = 'viewlog [options] [group] [client client ....]'
-    desc    = 'Data Transport Log Viewer'
-    parser  = argparse.ArgumentParser(description=desc)
+    desc = "Data Transport Log Viewer"
+    parser = argparse.ArgumentParser(description=desc)
 
-    parser.add_argument('group', nargs="?", help='Group name')
-    parser.add_argument('client', nargs='*', help='Client names')
+    parser.add_argument(
+        "groups", nargs="*", help="Server/Group/Client names", default="."
+    )
+    parser.add_argument(
+        "-r", "--recursive", action="store_true", help="Show child log files"
+    )
+    parser.add_argument(
+        "-p",
+        "--parents",
+        nargs="?",
+        const=None,
+        default=0,
+        type=int,
+        help="Show parent log files",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
 
     args = parser.parse_args()
 
-    display(args)
-
+    Tail(args).run()
