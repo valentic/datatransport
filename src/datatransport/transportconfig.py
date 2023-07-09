@@ -47,6 +47,9 @@
 #               Remove unused abort() method
 #               Remove uid, gid, username, groupname, hostname, umask
 #
+#   2023-07-09  Todd Valentic
+#               Add find_config_files() method
+#
 #############################################################################
 
 import os
@@ -79,3 +82,26 @@ class TransportConfig(sapphire.Parser):
         super().__init__(defaults=defaults)
 
         self.read(filenames)
+
+    def find_config_files(self, groupname, basepath, hostname):
+
+        def glob_conf(curpath, ext):
+            mainconf = curpath.joinpath(f"{curpath.name}.{ext}")
+            paths = sorted(list(curpath.glob(f"*.{ext}")))
+
+            if mainconf in paths:
+                paths.remove(mainconf)
+                paths.insert(0, mainconf)
+
+            return paths
+
+        configpaths = []
+
+        for path in reversed(pathlib.Path(groupname,'x').parents):
+            curpath = basepath.joinpath(path)
+
+            configpaths.extend(glob_conf(curpath, 'conf'))
+            configpaths.extend(glob_conf(curpath, f'conf-{hostname}'))
+
+        return configpaths
+

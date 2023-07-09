@@ -161,6 +161,9 @@
 #               Convert API to snake case naming
 #                   CurrentTime -> current_time
 #
+#   2023-07-09  Todd Valentic
+#               Use TransportConfig find_config_files()
+#
 ###########################################################################
 
 import atexit
@@ -187,6 +190,7 @@ from . import TransportConfig
 # For the get methods forwarded to the config
 # pylint: disable=no-member
 
+
 class ProcessClient(Root):
     """ProcessClient"""
 
@@ -197,7 +201,7 @@ class ProcessClient(Root):
         self.subprocs = set()
         self.started_rates = {}
         self.exit_event = threading.Event()
-        self.load_config()
+        config_files = self.load_config()
 
         url = self.config.parser.get("TransportServer", "url")
         self.server = xmlrpc.client.ServerProxy(url)
@@ -210,7 +214,7 @@ class ProcessClient(Root):
         self.server.loginclient(self.groupname, self.name, os.getpid())
 
         self.log.debug("Configuration files:")
-        for filename in self.config_files:
+        for filename in config_files:
             self.log.debug("  - %s", filename)
 
         atexit.register(self.on_exit)
@@ -311,41 +315,6 @@ class ProcessClient(Root):
         else:
             root_logger.setLevel(logging.DEBUG)
 
-    def find_config_files(self, basepath, hostname):
-        """Find all the relevant local configuration files along the path."""
-
-        path = os.path.normpath(self.groupname).split(os.path.sep)
-        path.insert(0, "")  # pick up files in root
-
-        curpath = basepath
-
-        configlist = []
-
-        for part in path:
-            curpath = os.path.join(curpath, part)
-            localconf = os.path.join(curpath, f"{part}.conf")
-            otherconf = glob.glob(os.path.join(curpath, "*.conf"))
-            hostlocalconf = f"{localconf}-{hostname}"
-            hostotherconf = glob.glob(os.path.join(curpath, f"*.conf-{hostname}"))
-
-            try:
-                otherconf.remove(localconf)
-                hostotherconf.remove(hostlocalconf)
-            except ValueError:
-                pass
-
-            if os.path.isfile(localconf):
-                configlist.append(localconf)
-
-            configlist.extend(sorted(otherconf))
-
-            if os.path.isfile(hostlocalconf):
-                configlist.append(hostlocalconf)
-
-            configlist.extend(sorted(hostotherconf))
-
-        return configlist
-
     def load_config(self):
         """Load the configuration files"""
 
@@ -357,13 +326,13 @@ class ProcessClient(Root):
         }
 
         config = TransportConfig(defaults)
-        basepath = config["TransportServer"]["path.groups"]
-        hostname = config["TransportServer"]["hostname"]
-        self.config_files = self.find_config_files(basepath, hostname)
+        basepath = config["TransportServer"].get_path("path.groups")
+        hostname = config["TransportServer"].get("hostname")
+        config_files = config.find_config_files(self.groupname, basepath, hostname)
 
         # Read one at a time so we know if one has an error
 
-        for filename in self.config_files:
+        for filename in config_files:
             config.read(filename)
 
         self.config = config[self.name]
@@ -378,6 +347,8 @@ class ProcessClient(Root):
                 setattr(self, key, method)
 
         self.get_components = functools.partial(self.config.get_components, parent=self)
+
+        return config_files
 
     def setup_environment(self):
         """Setup up environment variables"""
@@ -506,13 +477,13 @@ class ProcessClient(Root):
         """Run main application, capture any errors to log"""
         try:
             self.init()
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.log.exception("Problem detected in init")
             self.abort()
 
         try:
             self.main()
-        except: # pylint: disable=bare-except
+        except:  # pylint: disable=bare-except
             self.log.exception("Problem detected in main")
             return  # No clean exit so the watchdog will restart us
 

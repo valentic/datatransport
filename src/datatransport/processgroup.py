@@ -44,6 +44,10 @@
 #   2022-10-07  Todd Valentic
 #               Reorder imports
 #
+#   2023-07-09  Todd Valentic
+#               Use TransportConfig find_config_files()
+#               Use place holde {client.name} when showing config in debug 
+#
 #############################################################################
 
 import configparser
@@ -121,19 +125,20 @@ class ProcessGroup:
     def reload(self):
         """Reload configuration files"""
 
-        self.load_config()
+        config_files = self.load_config()
         self.setup_log()
         self.setup_environ()
         self.load_clients()
-        self.show_config()
+
+        self.show_config(config_files)
 
         return True
 
-    def show_config(self):
+    def show_config(self, config_files):
         """Display configuration options to log. Used for debugging"""
 
         self.log.debug("Configuration files:")
-        for filename in self.configfiles:
+        for filename in config_files:
             self.log.debug("  - %s", filename)
 
         self.log.debug("Configuration values:")
@@ -211,52 +216,22 @@ class ProcessGroup:
         else:
             self.log.setLevel(logging.DEBUG)
 
-    def find_config_files(self, server_config):
-        """Search for config files"""
-
-        # Find all the relevant local configuration files along the path.
-
-        path = os.path.normpath(self.name).split(os.path.sep)
-        path.insert(0, "")  # pick up files in root
-
-        curpath = server_config.get("path.groups")
-        hostname = server_config.get("hostname")
-
-        configlist = []
-
-        for part in path:
-            curpath = os.path.join(curpath, part)
-            localconf = os.path.join(curpath, f"{part}.conf")
-            hostconf = f"{localconf}-{hostname}"
-            otherconf = glob.glob(os.path.join(curpath, "*.conf"))
-            otherconf.sort()
-
-            if localconf in otherconf:
-                otherconf.remove(localconf)
-
-            if os.path.isfile(localconf):
-                configlist.append(localconf)
-
-            if os.path.isfile(hostconf):
-                configlist.append(hostconf)
-
-            configlist.extend(otherconf)
-
-        return configlist
-
     def load_config(self):
         """Load configuration"""
 
         defaults = {
+            "client.name": "{client.name}",
             "group.name": self.name,
             "group.basename": os.path.basename(self.name),
             "group.dirname": os.path.dirname(self.name),
         }
 
         self.config = TransportConfig(defaults)
-        self.configfiles = self.find_config_files(self.config['TransportServer'])
+        basepath = self.config["TransportServer"].get_path("path.groups")
+        hostname = self.config["TransportServer"].get("hostname")
+        config_files = self.config.find_config_files(self.name, basepath, hostname) 
 
-        for filename in self.configfiles:
+        for filename in config_files:
             self.config.read(filename)
 
         processgroup = self.config["ProcessGroup"]
@@ -267,6 +242,8 @@ class ProcessGroup:
         self.stop_priority = processgroup.get_int("priority.stop", 50)
         self.shutdown_timeout = processgroup.get_int("shutdown.timeout", 120)
         self.report_rate = processgroup.get_int("shutdown.report.rate", 15)
+
+        return config_files
 
     def load_clients(self):
         """Load clients"""
