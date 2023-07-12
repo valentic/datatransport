@@ -213,8 +213,6 @@ class Tail:
     def run(self):
         """Print the last 10 lines of each file, sort by time"""
 
-        paths = self.scan_groups(self.specs)
-
         if self.verbose:
             print("=" * 75)
             print(f"Looking in {self.specs}")
@@ -230,6 +228,7 @@ class Tail:
         # Tail forever
 
         while True:
+            paths = self.scan_groups(self.specs)
             self.trackers = self.update_trackers(self.trackers, paths)
 
             lines = []
