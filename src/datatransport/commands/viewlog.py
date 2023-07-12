@@ -214,13 +214,15 @@ class Tail:
         """Print the last 10 lines of each file, sort by time"""
 
         if self.verbose:
+            paths = self.scan_groups(self.specs)
+
             print("=" * 75)
             print(f"Looking in {self.specs}")
             if self.args.parents is None:
                 print("Parents: all")
             else:
                 print(f"Parents: {self.args.parents}")
-            print(f"Total lots: {len(paths)}")
+            print(f"Total log files: {len(paths)}")
             for path in paths:
                 print(path)
             print("=" * 75)
