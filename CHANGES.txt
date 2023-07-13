@@ -1,9 +1,13 @@
+2023-07-12  Todd Valentic
+    - Make sure viewlog opens new files
+    - Release 3.0.6
+
 2023-07-09  Todd Valentic
     - Add find_config_files() method to TransportConfig()
     - Allow hostname config files now on all configs
     - ProcessClient - use TransportConfig find_config_files 
     - ProcessGroup - use TransportConfig find_config_files 
-    - RElease 3.0.5
+    - Release 3.0.5
 
 2023-07-08  Todd Valentic
     - Major update to viewlog (parents and recursive views) 
