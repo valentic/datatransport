@@ -49,7 +49,7 @@ class Directory:
     def __init__(self, parent):
         self.parent = parent
 
-        url = parent.get("directory.url")
+        url = parent.config.get("directory.url")
         kwargs = {"allow_none": True, "use_builtin_types": True}
         self.directory = xmlrpc.client.ServerProxy(url, **kwargs)
 

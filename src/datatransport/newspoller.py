@@ -135,42 +135,51 @@
 #   2023-07-04  Todd Valentic
 #               Convert from being a mixin class
 #
+#   2023-07-27  Todd Valentic
+#               Use AccessMixin
+#
 ###########################################################################
 
 from datatransport import newstool
+from datatransport import AccessMixin
 
 
-class NewsPoller:
+class NewsPoller(AccessMixin):
     """News poller"""
 
     def __init__(self, parent, prefix="poll", callback=None, idle=None):
-        self.parent = parent
+        AccessMixin.__init__(self, parent)
+
         self.prefix = prefix
         self.idle = idle
-        self.rate = parent.get_rate(f"{prefix}.rate", 60)
+        self.rate = self.config.get_rate(f"{prefix}.rate", 60)
 
-        self.news_pollers = self._create_pollers(parent, prefix, callback)
+        self.news_pollers = self.create_pollers(prefix, callback)
 
     # pylint: disable=inconsistent-return-statements
-    def _connect_to_server(self, parent, host, port):
+    def connect_to_server(self, host, port):
+        """Open a connection to the news server"""
+
         server = newstool.NewsTool()
         server.set_server(host, port)
 
-        while parent.is_running():
+        while self.is_running():
             try:
                 server.open_server()
                 return server
             except:  # pylint: disable=bare-except
-                parent.log.exception(f"Failed to connect to {host}:{port}")
-                parent.wait(15)
+                self.log.exception(f"Failed to connect to {host}:{port}")
+                self.wait(15)
 
-        parent.abort("Exiting")
+        self.abort("Exiting")
 
-    def _get_newsgoups(self, parent, prefix, server):
-        targetgroup = parent.get(f"{prefix}.newsgroup", "")
-        targetgroups = parent.get_list(f"{prefix}.newsgroups", targetgroup)
-        excludegroup = parent.get(f"{prefix}.newsgroup.exclude", "")
-        excludegroups = parent.get_list(f"{prefix}.newsgroups.exclude", excludegroup)
+    def get_newsgoups(self, prefix, server):
+        """Get a list of newsgroups"""
+
+        targetgroup = self.config.get(f"{prefix}.newsgroup", "")
+        targetgroups = self.config.get_list(f"{prefix}.newsgroups", targetgroup)
+        excludegroup = self.config.get(f"{prefix}.newsgroup.exclude", "")
+        excludegroups = self.config.get_list(f"{prefix}.newsgroups.exclude", excludegroup)
 
         newsgroups = []
 
@@ -180,32 +189,34 @@ class NewsPoller:
                     matches = server.list_newsgroups(groupspec, excludegroups)
                     newsgroups.extend(matches)
                 except:  # pylint: disable=bare-except
-                    parent.log.info(f"Problem matching '{groupspec}'")
+                    self.log.info(f"Problem matching '{groupspec}'")
                     continue
             else:
                 newsgroups.append(groupspec)
 
         return newsgroups
 
-    def _create_pollers(self, parent, prefix, callback):
-        host = parent.get(f"{prefix}.newsserver", "localhost")
-        port = parent.get_int(f"{prefix}.newsserver.port", 119)
+    def create_pollers(self, prefix, callback):
+        """Create a news poller for each newsgroup"""
 
-        exit_on_error = parent.get_boolean(f"{prefix}.exit_on_error", False)
-        retry_wait = parent.get_timedelta(f"{prefix}.retry_wait", 60)
+        host = self.config.get(f"{prefix}.newsserver", "localhost")
+        port = self.config.get_int(f"{prefix}.newsserver.port", 119)
+
+        exit_on_error = self.config.get_boolean(f"{prefix}.exit_on_error", False)
+        retry_wait = self.config.get_timedelta(f"{prefix}.retry_wait", 60)
 
         # Prefix the tracking file when used in ConfigComponent
         # because we might have multiple references to the same group
 
-        if hasattr(parent, "prefix") and hasattr(parent, "name"):
-            last_read_prefix = f"{parent.prefix}-{parent.name}"
+        if hasattr(self.parent, "prefix") and hasattr(self.parent, "name"):
+            last_read_prefix = f"{self.parent.prefix}-{self.parent.name}"
         else:
             last_read_prefix = ""
 
-        server = self._connect_to_server(parent, host, port)
-        newsgroups = self._get_newsgoups(parent, prefix, server)
+        server = self.connect_to_server(host, port)
+        newsgroups = self.get_newsgoups(prefix, server)
 
-        parent.log.debug("Creating news pollers:")
+        self.log.debug("Creating news pollers:")
 
         pollers = []
 
@@ -213,85 +224,90 @@ class NewsPoller:
             poller = newstool.NewsPoller()
             poller.set_server(host, port)
             poller.set_newsgroup(newsgroup)
-            poller.set_log(parent.log)
+            poller.set_log(self.log)
             poller.set_callback(callback)
-            poller.set_stop_func(parent.is_stopped)
+            poller.set_stop_func(self.is_stopped)
             poller.set_retry_wait(retry_wait.total_seconds())
             poller.set_debug(exit_on_error)
             poller.set_last_read_prefix(last_read_prefix)
 
             pollers.append(poller)
 
-            parent.log.debug(f" - {newsgroup}")
+            self.log.debug(" - [%s:%s] %s", host, port, newsgroup)
 
         return pollers
 
-    def _run_pollers(self, catchup, reset):
+    def run_pollers(self, catchup, reset):
+        """Run each poller"""
+
         for poller in self.news_pollers:
             if reset and catchup != 0:
                 poller.mark_read(catchup, reset=reset)
 
             poller.poll()
 
-    def _run_idle(self):
-        if self.idle and self.parent.is_running():
+    def run_idle(self):
+        """Run the idle handler"""
+
+        if self.idle and self.is_running():
             self.idle()
 
-    def _mark_read(self, catchup, reset):
+    def mark_read(self, catchup, reset):
+        """Mark each newsgroup as read"""
+
         for poller in self.news_pollers:
             while not poller.has_newsgroup():
-                self.parent.log.error(
+                self.self.log.error(
                     f"The polling group ({poller.newsgroup_header}) "
                     f"does not exist on "
                     f"{poller.server_host}:{poller.server_port}, "
                     f"waiting 60 seconds ..."
                 )
-                if not self.parent.wait(60):
+                if not self.wait(60):
                     return
 
             if catchup != 0:
                 poller.mark_read(catchup, reset)
 
-    def _loop(self):
-        parent = self.parent
-        prefix = self.prefix
+    def process(self):
+        """Process messages"""
 
-        catchup = parent.get_int(f"{prefix}.catchup", 0)
-        catchup_reset = parent.get_boolean(f"{prefix}.catchup.reset", False)
-        exit_on_error = parent.get_boolean(f"{prefix}.exit_on_error", False)
+        catchup = self.config.get_int(f"{self.prefix}.catchup", 0)
+        catchup_reset = self.config.get_boolean(f"{self.prefix}.catchup.reset", False)
+        exit_on_error = self.config.get_boolean(f"{self.prefix}.exit_on_error", False)
 
         if catchup == 0:
-            parent.log.debug("Starting with first article in last read file")
+            self.log.debug("Starting with first article in last read file")
         else:
-            self._mark_read(catchup, catchup_reset)
+            self.mark_read(catchup, catchup_reset)
 
-        while parent.is_running():
+        while self.is_running():
             try:
-                self._run_pollers(catchup, catchup_reset)
+                self.run_pollers(catchup, catchup_reset)
             except:  # pylint: disable=bare-except
-                parent.log.exception("Error detected during polling")
+                self.log.exception("Error detected during polling")
                 if exit_on_error:
-                    parent.abort("Exiting on error")
+                    self.abort("Exiting on error")
 
             try:
-                self._run_idle()
+                self.run_idle()
             except:  # pylint: disable=bare-except
-                parent.log.exception("Error detected during idle")
+                self.log.exception("Error detected during idle")
                 if exit_on_error:
-                    parent.abort("Exiting on error")
+                    self.abort("Exiting on error")
 
             yield 1
 
     def main(self):
         """Main loop"""
 
-        if not self.parent.wait(self.rate):
+        if not self.wait(self.rate):
             return
 
-        for _step in self._loop():
-            self.parent.wait(self.rate)
+        for _step in self.process():
+            self.wait(self.rate)
 
     def run_step(self):
         """Run one step in main loop"""
 
-        next(self._loop())
+        next(self.process())

@@ -164,12 +164,16 @@
 #   2023-07-09  Todd Valentic
 #               Use TransportConfig find_config_files()
 #
+#   2023-07-25  Todd Valentic
+#               Add set() and options() to config proxy
+#               Do not map getters from config, use config object               
+#               current_time() renamed to now()
+#
 ###########################################################################
 
 import atexit
 import datetime
 import fnmatch
-import functools
 import glob
 import logging
 import os
@@ -179,6 +183,7 @@ import threading
 import time
 import xmlrpc.client
 
+from functools import partial
 from logging.handlers import RotatingFileHandler
 from logging.handlers import SocketHandler
 
@@ -259,8 +264,8 @@ class ProcessClient(Root):
     def _setup_log_socket_handler(self, formatter):
         """Add a socket log handler"""
 
-        host = self.get("log.socket.host", fallback="localhost")
-        port = self.get_int("log.socket.port", fallback=9020)
+        host = self.config.get("log.socket.host", fallback="localhost")
+        port = self.config.get_int("log.socket.port", fallback=9020)
 
         socket_handler = SocketHandler(host, port)
         socket_handler.setFormatter(formatter)
@@ -270,9 +275,9 @@ class ProcessClient(Root):
     def _setup_log_file_handler(self, formatter):
         """Add a rotating file log handler"""
 
-        filename = self.get("log.file")
-        maxbytes = self.get_bytes("log.maxbytes", fallback="100kb")
-        backup_count = self.get_int("log.backupcount", fallback=3)
+        filename = self.config.get("log.file")
+        maxbytes = self.config.get_bytes("log.maxbytes", fallback="100kb")
+        backup_count = self.config.get_int("log.backupcount", fallback=3)
 
         rotating_handler = RotatingFileHandler(filename, "a", maxbytes, backup_count)
         rotating_handler.setFormatter(formatter)
@@ -284,7 +289,7 @@ class ProcessClient(Root):
 
         msgfmt = "[%(asctime)s.%(msecs)03d %(levelname)7s] %(name)s"
 
-        if self.get_boolean("log.showthread", fallback=False):
+        if self.config.get_boolean("log.showthread", fallback=False):
             msgfmt += " [%(threadName)s]"
 
         msgfmt = msgfmt + ": %(message)s"
@@ -296,16 +301,16 @@ class ProcessClient(Root):
     def setup_log(self):
         """Setup log handlers"""
 
-        level = self.get("log.level", "info")
+        level = self.config.get("log.level", "info")
         formatter = self.setup_log_formatter()
 
         root_logger = logging.getLogger("")
         self.log = logging.getLogger(f"{self.groupname}/{self.name}")
 
-        if self.get_boolean("log.file.enable", True):
+        if self.config.get_boolean("log.file.enable", True):
             root_logger.addHandler(self._setup_log_file_handler(formatter))
 
-        if self.get_boolean("log.socket.enable", True):
+        if self.config.get_boolean("log.socket.enable", True):
             root_logger.addHandler(self._setup_log_socket_handler(formatter))
 
         if level == "warning":
@@ -336,17 +341,11 @@ class ProcessClient(Root):
             config.read(filename)
 
         self.config = config[self.name]
+        self.config.set = self.config.__setitem__
+        self.config.options = self.config._options
+        self.config.get_components = partial(self.config.get_components, parent=self)
 
         self.hostname = config.get("DEFAULT", "hostname")
-
-        # Map the config section proxy get() methods onto this class
-
-        for key in dir(self.config):
-            method = getattr(self.config, key)
-            if key.startswith("get") and callable(method):
-                setattr(self, key, method)
-
-        self.get_components = functools.partial(self.config.get_components, parent=self)
 
         return config_files
 
@@ -355,23 +354,23 @@ class ProcessClient(Root):
 
         self.log.debug("Setting environment variables:")
 
-        os.environ["PATH"] = self.get("path.exec", "/usr/local/bin:/bin:/usr/bin")
-        os.environ["PATH"] += ":" + self.get("group.bin")
-        os.environ["PATH"] += ":" + self.get("path.bin")
+        os.environ["PATH"] = self.config.get("path.exec", "/usr/local/bin:/bin:/usr/bin")
+        os.environ["PATH"] += ":" + self.config.get("group.bin")
+        os.environ["PATH"] += ":" + self.config.get("path.bin")
 
-        options = self.options()
+        options = self.config.options()
 
         setoptions = fnmatch.filter(options, "environ.set.*")
         addoptions = fnmatch.filter(options, "environ.add.*")
 
         for option in setoptions:
-            value = self.get(option)
+            value = self.config.get(option)
             var = option.split(".")[2].upper()
             os.environ[var] = value
             self.log.debug("  set: [%s] = %s", var, value)
 
         for option in addoptions:
-            value = self.get(option)
+            value = self.config.get(option)
             var = option.split(".")[2].upper()
             if var in os.environ:
                 # only add if not there
@@ -391,24 +390,17 @@ class ProcessClient(Root):
     def setup_working_dir(self):
         """Change to working directory"""
 
-        workingdir = os.path.join(self.get("group.work"), self.name)
+        workingdir = os.path.join(self.config.get("group.work"), self.name)
 
         if not os.path.exists(workingdir):
             os.makedirs(workingdir)
 
         os.chdir(workingdir)
 
-    def put(self, option, value):
-        """Put item info configuration"""
-        self.config.parser.set(self.name, option, value)
-
-    def options(self):
-        """Get all configuration options"""
-        return self.config.parser.options(self.name)
-
     def abort(self, msg="Exiting", status=1):
         """Exit process with error"""
         self.log.error(msg)
+        self.exit_event.set()
         sys.exit(status)
 
     def exit(self, msg="Exiting", status=0):
@@ -416,6 +408,10 @@ class ProcessClient(Root):
         self.log.info(msg)
         self.exit_event.set()
         sys.exit(status)
+
+    def stop(self):
+        """Request to stop"""
+        self.exit_event.set()
 
     def is_running(self):
         """Indicate the process is running"""
@@ -425,7 +421,7 @@ class ProcessClient(Root):
         """Indicate the processes has stopped"""
         return not self.running
 
-    def current_time(self):
+    def now(self):
         """Return current time as datetime with UTC timezone"""
         return datetime.datetime.now(self.utc)
 

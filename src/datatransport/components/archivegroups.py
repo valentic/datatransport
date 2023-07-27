@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""ArchiveGroups Component"""
+
+# pylint: disable=bare-except
+
 ##############################################################################
 #
 #  ArchiveGroups
@@ -210,7 +215,7 @@
 #               the processes are starting), but for long waits, it can
 #               be annoying for debugging.
 #
-#           Added start_currentReset (defaults on) to prevent reseting
+#           Added start_current_reset (defaults on) to prevent reseting
 #               the start_current counter, allowing you to "catchup"
 #               each time the news server is queried. Therefore, you
 #               can now do something like wake up each hour and just
@@ -346,6 +351,9 @@
 #                   getboolean -> get_boolean
 #                   NewsPoster
 #
+#   2023-07-26  Todd Valentic
+#               Updated for transport3 / python3
+#
 ##############################################################################
 
 import email
@@ -353,17 +361,16 @@ import fnmatch
 import glob
 import math
 import os
-import pathlib
 import shelve
 import shutil
 import stat
 import sys
 import subprocess
 import traceback
-import types
 
 from datetime import datetime, timezone
 from hashlib import md5
+from pathlib import Path
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -377,12 +384,14 @@ from datatransport.utilities import make_path
 
 
 def now():
+    """Return current time"""
     return datetime.now(timezone.utc)
 
 
 class Checkpoint:
-    def __init__(self, newsgroup, low_mark, max_history, keep_summary):
+    """Track newsgroup state"""
 
+    def __init__(self, newsgroup, low_mark, max_history, keep_summary):
         self.newsgroup = newsgroup
         self.last_message = low_mark - 1
 
@@ -402,6 +411,7 @@ class Checkpoint:
         self.max_history = max_history
 
     def update_message(self, msg_num, date=None):
+        """Update current state"""
 
         self.num_messages = self.num_messages + 1
         self.last_message = msg_num
@@ -411,21 +421,25 @@ class Checkpoint:
             self.last_time = date
 
     def touch_message(self, msg_num):
+        """Mark message time"""
 
         self.last_message = msg_num
         self.poll_time = now()
 
     def update_file(self, filename, numbytes):
-        if filename in self.filenames:
-            (prevMsgs, prevBytes) = self.filenames[filename]
-        else:
-            prevMsgs = 0
-            prevBytes = 0
+        """Update file stats"""
 
-        self.filenames[filename] = (prevMsgs + 1, prevBytes + numbytes)
+        if filename in self.filenames:
+            (prev_msgs, prev_bytes) = self.filenames[filename]
+        else:
+            prev_msgs = 0
+            prev_bytes = 0
+
+        self.filenames[filename] = (prev_msgs + 1, prev_bytes + numbytes)
         self.num_bytes = self.num_bytes + numbytes
 
     def reset(self, date=None, last_message=0):
+        """Reset state"""
 
         if not date:
             date = now()
@@ -448,9 +462,12 @@ class Checkpoint:
         self.last_message = last_message
 
     def is_active(self):
+        """Is newsgroup active"""
+
         return self.num_messages > 0
 
     def in_span(self, curtime, timespan):
+        """Check if time in span"""
 
         lastsecs = self.last_time.timestamp()
         cursecs = curtime.timestamp()
@@ -462,6 +479,7 @@ class Checkpoint:
         return lastblock == curblock
 
     def reset_summary(self):
+        """Reset summary counts"""
 
         self.summary_files = []
         self.summary_start = now()
@@ -469,20 +487,21 @@ class Checkpoint:
         self.summary_msgs = 0
 
     def get_report(self, title, reason):
+        """Generate report"""
 
         message = []
 
         fmt = "%c %Z %z"
 
         message.append("_" * 75)
-        message.append("%s" % title)
+        message.append(title)
         message.append("")
-        message.append("    Newsgroup     : %s" % self.newsgroup)
-        message.append("    Beginning     : %s" % self.start_time.strftime(fmt))
-        message.append("    Ending        : %s" % self.last_time.strftime(fmt))
-        message.append("    Messages      : %d" % self.num_messages)
-        message.append("    Total bytes   : %s" % size_desc(self.num_bytes))
-        message.append("    Reason        : %s" % reason)
+        message.append(f"    Newsgroup     : {self.newsgroup}")
+        message.append(f"    Beginning     : {self.start_time.strftime(fmt)}")
+        message.append(f"    Ending        : {self.last_time.strftime(fmt)}")
+        message.append(f"    Messages      : {self.num_messages}")
+        message.append(f"    Total bytes   : {size_desc(self.num_bytes)}")
+        message.append(f"    Reason        : {reason}")
         message.append("")
 
         if self.filenames:
@@ -496,7 +515,7 @@ class Checkpoint:
                 else:
                     units = "msg"
                 message.append(
-                    "    %s: %s (%d %s)" % (filename, size_desc(numbytes), msgs, units)
+                    f"    {filename}: {size_desc(numbytes)} ({msgs} {units})"
                 )
 
         message.append("_" * 75)
@@ -505,19 +524,20 @@ class Checkpoint:
         return message
 
     def get_summary(self, title):
+        """Get summary report"""
 
         message = []
 
         fmt = "%c %Z %z"
 
         message.append("_" * 75)
-        message.append("%s" % title)
+        message.append(title)
         message.append("")
-        message.append("    Newsgroup     : %s" % self.newsgroup)
-        message.append("    Beginning     : %s" % self.summary_start.strftime(fmt))
-        message.append("    Ending        : %s" % now().strftime(fmt))
-        message.append("    Messages      : %d" % self.summary_msgs)
-        message.append("    Total bytes   : %s" % size_desc(self.summary_bytes))
+        message.append(f"    Newsgroup     : {self.newsgroup}")
+        message.append(f"    Beginning     : {self.summary_start.strftime(fmt)}")
+        message.append(f"    Ending        : {now().strftime(fmt)}")
+        message.append(f"    Messages      : {self.summary_msgs}")
+        message.append(f"    Total bytes   : {size_desc(self.summary_bytes)}")
         message.append("")
 
         if self.summary_files:
@@ -525,7 +545,6 @@ class Checkpoint:
             message.append("    ---------")
 
             for filegroup in self.summary_files:
-
                 prefix = "-"
                 for filename in sorted(filegroup):
                     msgs, numbytes = filegroup[filename]
@@ -534,8 +553,7 @@ class Checkpoint:
                     else:
                         units = "msg"
                     message.append(
-                        "  %s %s: %s (%d %s)"
-                        % (prefix, filename, size_desc(numbytes), msgs, units)
+                        f"  {prefix} {filename}: {size_desc(numbytes)} ({msgs} {units})"
                     )
                     prefix = " "
 
@@ -546,6 +564,8 @@ class Checkpoint:
 
 
 class ArchiveGroups(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
@@ -563,64 +583,76 @@ class ArchiveGroups(ProcessClient):
         self.replace_history = PatternTemplate("history")
         self.replace_header = PatternTemplate("header")
 
-        self.time_offset = self.get_timedelta("timeoffset", 0)
-        self.pollrate = self.get_rate("input.pollrate", 60)
-        self.wait_on_start = self.get_boolean("input.wait_on_start", True)
+        self.time_offset = self.config.get_timedelta("timeoffset", 0)
+        self.pollrate = self.config.get_rate("input.pollrate", 60)
+        self.wait_on_start = self.config.get_boolean("input.wait_on_start", True)
 
-        self.pollserver_host = self.get("input.server", "localhost")
-        self.pollserver_port = self.get_int("input.server.port", 119)
-        self.timeout = self.get_timedelta("input.timeout", None)
-        self.timegap = self.get_timedelta("input.timegap", None)
-        self.timespan = self.get_timedelta("input.timespan", None)
-        self.start_time = self.get("input.start_time", None)
-        self.stop_time = self.get("input.stop_time", None)
-        self.start_current = self.get_int("input.start_current", 1)
-        self.start_currentReset = self.get_boolean("input.start_current.reset", True)
+        self.pollserver_host = self.config.get("input.server", "localhost")
+        self.pollserver_port = self.config.get_int("input.server.port", 119)
+        self.timeout = self.config.get_timedelta("input.timeout", None)
+        self.timegap = self.config.get_timedelta("input.timegap", None)
+        self.timespan = self.config.get_timedelta("input.timespan", None)
+        self.start_time = self.config.get("input.start_time", None)
+        self.stop_time = self.config.get("input.stop_time", None)
+        self.start_current = self.config.get_int("input.start_current", 1)
+        self.start_current_reset = self.config.get_boolean(
+            "input.start_current.reset", True
+        )
 
-        self.dest_path = self.get("output.path", "")
-        self.dest_name = self.get("output.name", "<rule>")
-        self.dest_file_mode = self.get_int("output.mode.file", "0o644")
-        self.dest_path_mode = self.get_int("output.mode.path", "0o755")
-        self.max_messages = self.get_int("output.max_messages", 1)
-        self.expire = self.get_timedelta("output.expire", None)
-        self.history = self.get_int("output.history", 0)
-        self.plain_text_name = self.get("output.plain_text_name", "noname.txt")
-        self.uncompress = self.get_boolean("output.uncompress", False)
-        self.overwrite = self.get_boolean("output.overwrite", True)
+        self.dest_path = self.config.get("output.path", "")
+        self.dest_name = self.config.get("output.name", "<rule>")
+        self.dest_file_mode = self.config.get_int("output.mode.file", "0o644")
+        self.dest_path_mode = self.config.get_int("output.mode.path", "0o755")
+        self.max_messages = self.config.get_int("output.max_messages", 1)
+        self.expire = self.config.get_timedelta("output.expire", None)
+        self.history = self.config.get_int("output.history", 0)
+        self.plain_text_name = self.config.get("output.plain_text_name", "noname.txt")
+        self.uncompress = self.config.get_boolean("output.uncompress", False)
+        self.overwrite = self.config.get_boolean("output.overwrite", True)
 
-        self.report_subject = self.get("report.subject", "Newsgroup archive report")
-        self.report_title = self.get("report.title", "Newsgroup archive report")
+        self.report_subject = self.config.get(
+            "report.subject", "Newsgroup archive report"
+        )
+        self.report_title = self.config.get("report.title", "Newsgroup archive report")
 
         enable = self.report_poster.enabled
-        self.report_max_messages = self.get_boolean("report.enable.max_messages", enable)
-        self.report_timeout = self.get_boolean("report.enable.timeout", enable)
-        self.report_timegap = self.get_boolean("report.enable.timegap", enable)
-        self.report_timespan = self.get_boolean("report.enable.timespan", enable)
+        self.report_max_messages = self.config.get_boolean(
+            "report.enable.max_messages", enable
+        )
+        self.report_timeout = self.config.get_boolean("report.enable.timeout", enable)
+        self.report_timegap = self.config.get_boolean("report.enable.timegap", enable)
+        self.report_timespan = self.config.get_boolean("report.enable.timespan", enable)
 
-        self.summary_subject = self.get("summary.subject", "Newsgroup summary report")
-        self.summary_title = self.get("summary.title", "Newsgroup summary report")
-        self.summary_enable = self.get_boolean(
+        self.summary_subject = self.config.get(
+            "summary.subject", "Newsgroup summary report"
+        )
+        self.summary_title = self.config.get(
+            "summary.title", "Newsgroup summary report"
+        )
+        self.summary_enable = self.config.get_boolean(
             "summary.enable", self.summary_poster.enabled
         )
-        self.summary_period = self.get_timedelta("summary.period", 60 * 60 * 24)
-        self.summary_offset = self.get_timedelta("summary.offset", 0)
-        self.summary_max_files = self.get_int("summary.max_files", 1000)
+        self.summary_period = self.config.get_timedelta("summary.period", 60 * 60 * 24)
+        self.summary_offset = self.config.get_timedelta("summary.offset", 0)
+        self.summary_max_files = self.config.get_int("summary.max_files", 1000)
 
-        self.debug = self.get_boolean("debug", False)
+        self.debug = self.config.get_boolean("debug", False)
 
-        self.include_newsgroups = self.get_list("input.newsgroups")
-        self.exclude_newsgroups = self.get_list("input.newsgroups.exclude")
-        self.include_filenames = self.get_list("input.filenames", "*")
-        self.exclude_filenames = self.get_list("input.filenames.exclude")
+        self.include_newsgroups = self.config.get_list("input.newsgroups")
+        self.exclude_newsgroups = self.config.get_list("input.newsgroups.exclude")
+        self.include_filenames = self.config.get_list("input.filenames", "*")
+        self.exclude_filenames = self.config.get_list("input.filenames.exclude")
 
         try:
-            self.callback = self.get_callback("callback")
+            self.callback = self.config.get_callback("callback")
         except:
             self.log.exception("Problem loading callback")
             self.abort()
 
         try:
-            self.rules = eval(self.get("output.rules", "[('*','*','<filename>')]"))
+            self.rules = eval(
+                self.config.get("output.rules", "[('*','*','<filename>')]")
+            )
         except:
             self.log.exception("There was a problem parsing output.rules.")
             self.abort()
@@ -635,13 +667,13 @@ class ArchiveGroups(ProcessClient):
             pass
 
     def setup_database(self):
+        """Setup checkpoint database"""
 
         self.database = shelve.open("checkpoint.db")
 
         # Update the config parameters in the database to new values.
 
-        for key in self.database.keys():
-            checkpoint = self.database[key]
+        for key, checkpoint in self.database.items():
             checkpoint.max_history = self.history
             checkpoint.keep_summary = self.summary_enable
             checkpoint.summary_max_files = self.summary_max_files
@@ -653,13 +685,14 @@ class ArchiveGroups(ProcessClient):
         self.database.sync()
 
     def validate_setup(self):
+        """Validate setup"""
 
         if self.start_time:
             try:
                 self.start_time = datefunc.strptime(
                     self.start_time, self.time_fmt, timezone.utc
                 )
-                self.log.info("Only processing messages past %s" % self.start_time)
+                self.log.info("Only processing messages past %s", self.start_time)
             except:
                 self.log.exception(
                     "The start time format is bad. It should be YYYY JJJ HH:MM:SS"
@@ -671,7 +704,7 @@ class ArchiveGroups(ProcessClient):
                 self.stop_time = datefunc.strptime(
                     self.stop_time, self.time_fmt, timezone.utc
                 )
-                self.log.info("Only processing messages before  %s" % self.stop_time)
+                self.log.info("Only processing messages before  %s", self.stop_time)
             except:
                 self.log.exception(
                     "The stop time format is bad. It should be YYYY JJJ HH:MM:SS"
@@ -680,24 +713,24 @@ class ArchiveGroups(ProcessClient):
 
         self.log.debug("Watching these newsgroups (+ = include, - = exclude):")
         for newsgroup in self.include_newsgroups:
-            self.log.debug("  + %s" % newsgroup)
+            self.log.debug("  + %s", newsgroup)
         for newsgroup in self.exclude_newsgroups:
-            self.log.debug("  - %s" % newsgroup)
+            self.log.debug("  - %s", newsgroup)
 
         self.log.debug("Watching these filenames (+ = include, - = exclude):")
         for filename in self.include_filenames:
-            self.log.debug("  + %s" % filename)
+            self.log.debug("  + %s", filename)
         for filename in self.exclude_filenames:
-            self.log.debug("  - %s" % filename)
+            self.log.debug("  - %s", filename)
 
     def get_groups(self, newsserver):
+        """Get newsgroup list"""
 
         groups = []
 
-        response, list = newsserver.list()
+        _response, newsgroup_list = newsserver.list()
 
-        for newsgroup, high_mark, low_mark, flag in list:
-
+        for newsgroup, high_mark, low_mark, _flag in newsgroup_list:
             high_mark = int(high_mark)
             low_mark = int(low_mark)
 
@@ -720,11 +753,11 @@ class ArchiveGroups(ProcessClient):
         return groups
 
     def filter_filenames(self, filenames):
+        """Filter filenames"""
 
         goodfiles = []
 
         for filename in filenames:
-
             for incpattern in self.include_filenames:
                 if fnmatch.fnmatch(filename, incpattern):
                     keep = 1
@@ -737,10 +770,12 @@ class ArchiveGroups(ProcessClient):
 
         return goodfiles
 
-    def get_file_time(self, newsgroup, filename):
+    def get_file_time(self, _newsgroup, _filename):
+        """Get timestamp from filename"""
         return None
 
     def compute_name(self, filename, checkpoint):
+        """Compute filename"""
 
         rule = self.find_rule(checkpoint.newsgroup, filename)
 
@@ -748,12 +783,11 @@ class ArchiveGroups(ProcessClient):
         path = self.replace_rule(path, rule)
 
         try:
-            filetime = self.get_file_time(checkpoint.newsgroup, filename)
+            filetime = self.config.get_file_time(checkpoint.newsgroup, filename)
         except:
             filetime = None
 
         if filetime is None:
-
             if self.max_messages == 1:
                 filetime = checkpoint.last_time
             else:
@@ -761,7 +795,7 @@ class ArchiveGroups(ProcessClient):
 
         # NOTE - Potential breakage with long paths and versions
         #        of python < 2.4.4 where strftime is limited to
-        #        127 character strings. Miving it to the end
+        #        127 character strings. Moving it to the end
         #        of the expansion here, helped, but I need to
         #        figure out a better way of doing this...
 
@@ -775,6 +809,7 @@ class ArchiveGroups(ProcessClient):
         return path
 
     def find_rule(self, newsgroup, filename):
+        """Find matching rule"""
 
         for rule in self.rules:
             if fnmatch.fnmatch(newsgroup, rule[0]) and fnmatch.fnmatch(
@@ -785,6 +820,7 @@ class ArchiveGroups(ProcessClient):
         return ""
 
     def post_report(self, checkpoint, reason):
+        """Post report"""
 
         title = self.report_title
         title = self.replace_newsgroup(title, checkpoint.newsgroup)
@@ -801,11 +837,12 @@ class ArchiveGroups(ProcessClient):
         try:
             self.report_poster.set_subject(header)
             self.report_poster.post_text(message)
-            self.log.info("%s, posting report (%s)" % (reason, checkpoint.newsgroup))
+            self.log.info("%s, posting report (%s)", reason, checkpoint.newsgroup)
         except:
-            self.log.error("Error posting report message")
+            self.log.exception("Error posting report message")
 
     def post_summary(self, checkpoint):
+        """Post summary report"""
 
         title = self.summary_title
         title = self.replace_newsgroup(title, checkpoint.newsgroup)
@@ -822,54 +859,54 @@ class ArchiveGroups(ProcessClient):
         try:
             self.summary_poster.set_subject(header)
             self.summary_poster.post_text(message)
-            self.log.info("Posting summary report (%s)" % (checkpoint.newsgroup))
+            self.log.info("Posting summary report (%s)", checkpoint.newsgroup)
         except:
             self.log.error("Error posting summary message")
 
     def roll_files(self, checkpoint):
+        """Only keep N files"""
 
         self.log.debug("Rolling file history:")
-        self.log.debug("  history length: %d" % len(checkpoint.history))
-        self.log.debug("  max history: %d" % checkpoint.max_history)
+        self.log.debug("  history length: %d", len(checkpoint.history))
+        self.log.debug("  max history: %d", checkpoint.max_history)
 
         if not checkpoint.history or checkpoint.max_history == 0:
             self.log.debug("  no files to roll")
             return
 
-        historyIndex = list(range(len(checkpoint.history)))
-        historyIndex.reverse()
+        history_index = list(range(len(checkpoint.history)))
+        history_index.reverse()
 
-        for index in historyIndex:
-
+        for index in history_index:
             filenames = checkpoint.history[index][0].keys()
 
             for filename in filenames:
-
                 oldname = self.replace_history(filename, index)
                 newname = self.replace_history(filename, index + 1)
 
                 try:
                     if index < checkpoint.max_history:
                         if oldname == newname:
-                            self.log.debug("  keeping  %s" % oldname)
+                            self.log.debug("  keeping  %s", oldname)
                         else:
                             os.rename(oldname, newname)
-                            self.log.debug("  copying  %s -> %s" % (oldname, newname))
+                            self.log.debug("  copying  %s -> %s", oldname, newname)
                     else:
                         os.remove(oldname)
-                        self.log.debug("  removing %s" % oldname)
+                        self.log.debug("  removing %s", oldname)
                 except:
                     pass
 
     def save_callback(self, filename):
+        """Save callback"""
 
         # Used by derived classes to do something interesting with
         # the newly saved file such as creating a thumbnail of images.
 
-        pass
-
     def save_handler(self, srcname, destname, mode):
-        srcfile = open(srcname, "r")
+        """Save handler"""
+
+        srcfile = open(srcname, "rb")
         destfile = open(destname, mode)
         shutil.copyfileobj(srcfile, destfile)
         srcfile.close()
@@ -877,29 +914,29 @@ class ArchiveGroups(ProcessClient):
         os.chmod(destname, self.dest_file_mode)
 
     def save_file(self, srcname, checkpoint):
+        """Save single file"""
 
         num_bytes = os.stat(srcname)[stat.ST_SIZE]
         name = self.compute_name(srcname, checkpoint)
-        destname = self.replace_history(name, 0)
+        destname = self.replace_history(name, str(0))
         destname = os.path.abspath(destname)
-        dirname = os.path.dirname(destname)
 
-        self.log.debug("Saving %s" % srcname)
-        self.log.debug("  dest: %s" % destname)
-        self.log.debug("  maxmessages: %d" % self.max_messages)
-        self.log.debug("  nummessages: %d" % checkpoint.num_messages)
-        self.log.debug("  is_active: %s" % checkpoint.is_active())
+        self.log.debug("Saving %s", srcname)
+        self.log.debug("  dest: %s", destname)
+        self.log.debug("  maxmessages: %d", self.max_messages)
+        self.log.debug("  nummessages: %d", checkpoint.num_messages)
+        self.log.debug("  is_active: %s", checkpoint.is_active())
 
         if not self.overwrite and os.path.exists(destname):
             self.log.debug("  destination exists - not saving")
             return
 
         if self.max_messages != 1 and checkpoint.is_active():
-            mode = "a"
-            self.log.info("Concat: %s -> %s" % (srcname, destname))
+            mode = "ab"
+            self.log.info("Concat: %s -> %s", srcname, destname)
         else:
-            mode = "w"
-            self.log.info("Start : %s -> %s" % (srcname, destname))
+            mode = "wb"
+            self.log.info("Start : %s -> %s", srcname, destname)
 
         try:
             make_path(destname, self.dest_path_mode)
@@ -925,32 +962,37 @@ class ArchiveGroups(ProcessClient):
         checkpoint.update_file(name, num_bytes)
 
     def uncompress_file(self, cmd, filename):
+        """Uncompress file if needed"""
 
-        uncompressname = filename.stem 
+        uncompressname = filename.stem
 
         try:
-            status, output = subprocess.getstatusoutput("%s %s" % (cmd, filename))
+            status, output = subprocess.getstatusoutput(f"{cmd} {filename}")
         except IOError:
-            self.abort("Error running uncompression: %s" % cmd)
+            self.abort("Error running uncompression: %s", cmd)
 
         if status == 0:
-            self.log.debug("  uncompressing: %s" % filename)
+            self.log.debug("  uncompressing: %s", filename)
         else:
             subject = "Archive: Error umcompressing file"
             note = []
             note.append("Error trying to uncompress file")
-            note.append("   command: %s" % cmd)
-            note.append("   status:  %d" % status)
-            note.append("   output:  %s" % output)
+            note.append("   command: %s", cmd)
+            note.append("   status:  %d", status)
+            note.append("   output:  %s", output)
             self.post_error(subject, note)
             return None
 
-        return pathlib.Path(uncompressname)
+        return Path(uncompressname)
 
     def last_tracback(self):
+        """Format last traceback"""
+
         return traceback.format_tb(sys.exc_traceback)[-1]
 
     def post_error(self, subject, note):
+        """Post error message"""
+
         for line in note:
             self.log.error(line)
 
@@ -961,10 +1003,12 @@ class ArchiveGroups(ProcessClient):
         except:
             self.log.exception("Failed to post trouble message")
 
-    def validate_file(self, filename):
+    def validate_file(self, _filename):
+        """Validate file"""
         return True
 
     def process_files(self, filenames, checkpoint, msg_num, msg_time):
+        """Process files"""
 
         # Hack alert - the callbacks sometimes want access to
         # the message time.
@@ -981,12 +1025,10 @@ class ArchiveGroups(ProcessClient):
         uncompressedfiles = []
 
         for filename in filenames:
-
             if self.uncompress:
-
-                if filename.suffix == ".zip":
-                    filename = self.uncompress_file("unzip -o", filename)
-                elif filename.suffix == ".gz":
+                # if filename.suffix == ".zip":
+                #    filename = self.uncompress_file("unzip -o", filename)
+                if filename.suffix == ".gz":
                     filename = self.uncompress_file("gunzip -f", filename)
                 elif filename.suffix == ".bz2":
                     filename = self.uncompress_file("bunzip2 -f", filename)
@@ -999,7 +1041,6 @@ class ArchiveGroups(ProcessClient):
         savefiles = []
 
         for filename in uncompressedfiles:
-
             if not self.validate_file(filename):
                 continue
 
@@ -1023,31 +1064,30 @@ class ArchiveGroups(ProcessClient):
                 savefiles.append(filename)
 
         for filename in savefiles:
-
             try:
                 self.save_file(filename, checkpoint)
             except:
                 note = []
                 note.append("Problem storing file:")
-                note.append("  filename    = %s" % filename)
-                note.append("  path        = %s" % self.dest_path)
-                note.append("  message num = %d" % msg_num)
-                note.append("  newsgroup   = %s" % checkpoint.newsgroup)
-                note.append("  file mode   = %o" % self.dest_file_mode)
-                note.append("  path mode   = %o" % self.dest_path_mode)
+                note.append(f"  filename    = {filename}")
+                note.append(f"  path        = {self.dest_path}")
+                note.append(f"  message num = {msg_num}")
+                note.append(f"  newsgroup   = {checkpoint.newsgroup}")
+                note.append(f"  file mode   = {oct(self.dest_file_mode)}")
+                note.append(f"  path mode   = {oct(self.dest_path_mode)}")
                 note.append("")
                 note.append(traceback.format_exc())
 
-                subject = "Archive: problem saving %s" % filename
+                subject = f"Archive: problem saving {filename}"
 
                 self.post_error(subject, note)
 
                 if self.debug:
                     self.log.error("Exiting on error (debug mode on)")
                     raise
-                else:
-                    self.abort("Exiting on error")
-                    break
+
+                self.abort("Exiting on error")
+                break
 
             remove_file(filename)
 
@@ -1055,9 +1095,12 @@ class ArchiveGroups(ProcessClient):
                 break
 
     def modify_message(self, message):
+        """Modify message"""
+
         return message
 
     def process_message(self, newsserver, msg_num, checkpoint):
+        """Process message"""
 
         try:
             article = newsserver.article(str(msg_num))[1]
@@ -1084,14 +1127,14 @@ class ArchiveGroups(ProcessClient):
 
         if self.start_time and msg_time < self.start_time:
             self.log.debug(
-                "    rejecting - too old (%s)" % msg_time.strftime(self.time_fmt)
+                "    rejecting - too old (%s)", msg_time.strftime(self.time_fmt)
             )
             checkpoint.reset(msg_time, msg_num)
             return
 
         if self.stop_time and msg_time > self.stop_time:
             self.log.debug(
-                "    rejecting - too new (%s)" % msg_time.strftime(self.time_fmt)
+                "    rejecting - too new (%s)", msg_time.strftime(self.time_fmt)
             )
             checkpoint.reset(msg_time, msg_num)
             return
@@ -1122,7 +1165,6 @@ class ArchiveGroups(ProcessClient):
             return
 
         if "x-transport-part" in message:
-
             # Assumes that there is only one part attached
 
             part, total = map(int, message["X-Transport-Part"].split("/"))
@@ -1139,22 +1181,19 @@ class ArchiveGroups(ProcessClient):
             parts = sorted(glob.glob(os.path.join(workdir, "*")))
 
             if len(parts) == total:
-
-                destfile = open(destname, "w")
-
-                for filepart in parts:
-                    destfile.write(open(filepart).read())
-
-                destfile.close()
+                with Path(destname).open("wb") as destfile:
+                    for filepart in parts:
+                        contents = Path(filepart).read_bytes()
+                        destfile.write(contents)
 
                 remove_file(parts)
                 os.rmdir(workdir)
 
-                self.log.debug("Joined split message: %d parts" % total)
+                self.log.debug("Joined split message: %d parts", total)
 
                 if "x-transport-md5" in message:
                     orgmd5 = message["x-transport-md5"]
-                    newmd5 = md5(open(destname).read()).hexdigest()
+                    newmd5 = md5(Path(destname).read_bytes()).hexdigest()
                     if orgmd5 == newmd5:
                         self.log.debug("  MD5 checksum matches")
                         filenames = [destname]
@@ -1163,10 +1202,10 @@ class ArchiveGroups(ProcessClient):
 
                         note = []
                         note.append("MD5 mistmatch in file")
-                        note.append("  message ID: %s" % message["Xref"])
-                        note.append("  filename:   %s" % destname)
-                        note.append("  expected:   %s" % orgmd5)
-                        note.append("  found:      %s" % newmd5)
+                        note.append(f"  message ID: {message['Xref']}")
+                        note.append(f"  filename:   {destname}")
+                        note.append(f"  expected:   {orgmd5}")
+                        note.append(f"  found:      {newmd5}")
                         self.post_error(subject, note)
 
                         filenames = []
@@ -1176,18 +1215,19 @@ class ArchiveGroups(ProcessClient):
 
             else:
                 filenames = []
-                self.log.debug("Joining split message: part %d of %d" % (part, total))
+                self.log.debug("Joining split message: part %d of %d", part, total)
 
         goodfiles = self.filter_filenames(filenames)
         self.log.debug(
-            "    message contains %d file(s), saving %d:"
-            % (len(filenames), len(goodfiles))
+            "    message contains %d file(s), saving %d:",
+            len(filenames),
+            len(goodfiles),
         )
         for filename in filenames:
             if filename in goodfiles:
-                self.log.debug("      + %s" % filename)
+                self.log.debug("      + %s", filename)
             else:
-                self.log.debug("      - %s" % filename)
+                self.log.debug("      - %s", filename)
 
         if goodfiles:
             self.process_files(goodfiles, checkpoint, msg_num, msg_time)
@@ -1196,8 +1236,9 @@ class ArchiveGroups(ProcessClient):
         remove_file(filenames)
 
         self.log.debug(
-            "    after writing files, message count=%d, max=%d"
-            % (checkpoint.num_messages, self.max_messages)
+            "    after writing files, message count=%d, max=%d",
+            checkpoint.num_messages,
+            self.max_messages,
         )
 
         if self.max_messages and checkpoint.num_messages >= self.max_messages:
@@ -1209,11 +1250,14 @@ class ArchiveGroups(ProcessClient):
                 checkpoint.reset(msg_time, msg_num)
 
     def process_group(self, newsserver, checkpoint, low_mark, high_mark):
+        """Process newsgroup"""
 
-        self.log.debug("Processing newsgroup: %s" % checkpoint.newsgroup)
+        self.log.debug("Processing newsgroup: %s", checkpoint.newsgroup)
         self.log.debug(
-            "  available message numbers: %d - %d, last processed: %d"
-            % (low_mark, high_mark, checkpoint.last_message)
+            "  available message numbers: %d - %d, last processed: %d",
+            low_mark,
+            high_mark,
+            checkpoint.last_message,
         )
 
         if self.start_current == 1:
@@ -1221,18 +1265,21 @@ class ArchiveGroups(ProcessClient):
             checkpoint.reset(last_message=high_mark)
 
         elif self.start_current < 0:
-            lastMsg = max(low_mark - 1, high_mark + self.start_current)
-            lastMsg = max(lastMsg, checkpoint.last_message)
+            last_msg = max(low_mark - 1, high_mark + self.start_current)
+            last_msg = max(last_msg, checkpoint.last_message)
             self.log.debug(
-                "  starting with last %d message(s)" % abs(high_mark - lastMsg)
+                "  starting with last %d message(s)", abs(high_mark - last_msg)
             )
-            checkpoint.reset(last_message=lastMsg)
+            checkpoint.reset(last_message=last_msg)
 
         elif low_mark > high_mark:
             self.log.debug("  no messages on server")
             return
 
-        elif checkpoint.last_message < low_mark - 1 or checkpoint.last_message > high_mark:
+        elif (
+            checkpoint.last_message < low_mark - 1
+            or checkpoint.last_message > high_mark
+        ):
             self.log.info("  message count reset")
             checkpoint.reset(last_message=low_mark - 1)
 
@@ -1251,8 +1298,7 @@ class ArchiveGroups(ProcessClient):
         newsserver.group(checkpoint.newsgroup)
 
         for msg_num in range(checkpoint.last_message + 1, high_mark + 1):
-
-            self.log.debug("  processing message %d" % msg_num)
+            self.log.debug("  processing message %d", msg_num)
 
             self.process_message(newsserver, msg_num, checkpoint)
             self.database[checkpoint.newsgroup] = checkpoint
@@ -1262,12 +1308,12 @@ class ArchiveGroups(ProcessClient):
                 break
 
     def check_groups(self):
+        """Check newsgroups"""
 
         host = self.pollserver_host
         port = self.pollserver_port
 
         with newstool.NewsTool().open_server(host, port) as newsserver:
-
             for newsgroup, low_mark, high_mark in self.get_groups(newsserver):
                 checkpoint = self.database[newsgroup]
                 self.process_group(newsserver, checkpoint, low_mark, high_mark)
@@ -1277,40 +1323,41 @@ class ArchiveGroups(ProcessClient):
                 if self.is_stopped():
                     break
 
-        if self.start_currentReset:
+        if self.start_current_reset:
             self.start_current = 0
 
     def expire_files(self):
+        """Expire old files"""
 
         self.log.debug("Expiring old files")
 
-        for key in self.database.keys():
-            self.log.debug("  - %s" % key)
-            checkpoint = self.database[key]
+        for key, checkpoint in self.database.items():
+            self.log.debug("  - %s", key)
 
             if len(checkpoint.history) > 0:
-
                 self.log.debug("    checking file history expire times:")
 
-                historyIndex = list(range(len(checkpoint.history)))
-                historyIndex.reverse()
+                history_index = list(range(len(checkpoint.history)))
+                history_index.reverse()
 
-                for index in historyIndex:
-
+                for index in history_index:
                     filenames, lastdate = checkpoint.history[index]
 
                     diff = now() - lastdate
                     expire = diff > self.expire
 
                     self.log.debug(
-                        "      %d: time=%s, diff=%s, expire? %d"
-                        % (index, lastdate, diff, expire)
+                        "      %d: time=%s, diff=%s, expire? %d",
+                        index,
+                        lastdate,
+                        diff,
+                        expire,
                     )
 
                     if expire:
                         for filename in filenames.keys():
                             filename = self.replace_history(filename, index)
-                            self.log.debug("         %s" % filename)
+                            self.log.debug("         %s", filename)
                             try:
                                 os.remove(filename)
                             except:
@@ -1324,29 +1371,29 @@ class ArchiveGroups(ProcessClient):
         self.database.sync()
 
     def check_summary(self):
+        """Check if time for summary report"""
 
         if not self.summary_enable:
             return
 
         self.log.debug("Checking summary reporting")
 
-        for key in self.database.keys():
-            self.log.debug("  - %s" % key)
-            checkpoint = self.database[key]
+        for key, checkpoint in self.database.items():
+            self.log.debug("  - %s", key)
 
             secs = checkpoint.summary_start.timestamp()
             interval = self.summary_period.total_seconds()
             offset = self.summary_offset.total_seconds()
 
-            nextTime = (math.floor(secs / interval) + 1) * interval + offset
-            nextTime = datetime.fromtimestamp(nextTime, tz=timezone.utc)
+            next_time = (math.floor(secs / interval) + 1) * interval + offset
+            next_time = datetime.fromtimestamp(next_time, tz=timezone.utc)
 
-            self.log.debug("    - interval = %s" % self.summary_period)
-            self.log.debug("    - offset   = %s" % self.summary_offset)
-            self.log.debug("    - start_time= %s" % checkpoint.summary_start)
-            self.log.debug("    - nextTime = %s" % nextTime)
+            self.log.debug("    - interval = %s", self.summary_period)
+            self.log.debug("    - offset   = %s", self.summary_offset)
+            self.log.debug("    - start_time= %s", checkpoint.summary_start)
+            self.log.debug("    - next_time = %s", next_time)
 
-            if now() >= nextTime:
+            if now() >= next_time:
                 self.log.info("Summary time reached")
                 self.post_summary(checkpoint)
                 checkpoint.reset_summary()
@@ -1356,15 +1403,15 @@ class ArchiveGroups(ProcessClient):
         self.database.sync()
 
     def main(self):
+        """Main application"""
 
-        self.log.info('Starting')
+        self.log.info("Starting")
 
         while self.wait(self.pollrate):
-
             try:
                 self.check_groups()
             except SystemExit:
-                self.log.info('TAV *** SYSTEM EXIT exception')
+                self.log.info("TAV *** SYSTEM EXIT exception")
                 break
             except:
                 note = [traceback.format_exc()]
@@ -1375,7 +1422,9 @@ class ArchiveGroups(ProcessClient):
             if self.expire:
                 self.expire_files()
 
-        self.log.info('Finished')
+        self.log.info("Finished")
+
 
 def main():
+    """Script entry point"""
     ArchiveGroups(sys.argv).run()

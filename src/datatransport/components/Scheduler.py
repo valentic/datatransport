@@ -61,6 +61,9 @@
 #   2022-10-07  Todd Valentic
 #               Reorder imports
 #
+#   2023-07-26  Todd Valentic
+#               Updated for transport3 / python3
+#
 #############################################################################
 
 import datetime
@@ -74,7 +77,7 @@ from datatransport.utilities import datefunc
 class Event(ConfigComponent):
     def __init__(self, name, parent):
         ConfigComponent.__init__(self, "event", name, parent)
-        self.startearly = self.get_boolean("startearly", False)
+        self.startearly = self.config.get_boolean("startearly", False)
 
     def __getrunning(self):
         return self.parent.running
@@ -95,16 +98,16 @@ class Scheduler(ProcessClient):
     def __init__(self, argv, EventFactory):
         ProcessClient.__init__(self, argv)
 
-        self.rate = self.get_timedelta("repeat.rate", ":60")
-        self.offset = self.get_timedelta("repeat.offset")
-        self.sync = self.get_boolean("repeat.sync", True)
-        self.whole = self.get_boolean("repeat.whole", False)
-        self.exit_on_error = self.get_boolean("exitOnError", False)
+        self.rate = self.config.get_timedelta("repeat.rate", 60)
+        self.offset = self.config.get_timedelta("repeat.offset")
+        self.sync = self.config.get_boolean("repeat.sync", True)
+        self.whole = self.config.get_boolean("repeat.whole", False)
+        self.exit_on_error = self.config.get_boolean("exitOnError", False)
 
         self.events = {}
         self.schedule = []
 
-        for entry in self.get("repeat.events").split("\n"):
+        for entry in self.config.get("repeat.events").split("\n"):
 
             try:
                 start, duration, name = entry.split("|")
@@ -137,8 +140,8 @@ class Scheduler(ProcessClient):
         # Sometimes small rounding errors creep in, so spin
         # around until we are really at the target time
 
-        while self.current_time() < starttime:
-            if not self.wait(starttime - self.current_time()):
+        while self.now() < starttime:
+            if not self.wait(starttime - self.now()):
                 return False
 
         return True
@@ -158,7 +161,7 @@ class Scheduler(ProcessClient):
 
         while not error and self.is_running():
 
-            basetime = self.current_time()
+            basetime = self.now()
 
             if self.sync:
                 rate = self.rate.total_seconds()
@@ -182,7 +185,7 @@ class Scheduler(ProcessClient):
 
                 self.log.info("Processing %s" % name)
 
-                if self.current_time() >= endtime:
+                if self.now() >= endtime:
                     self.log.info("  past end time, skipping")
                     continue
 

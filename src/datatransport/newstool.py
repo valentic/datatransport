@@ -343,9 +343,13 @@
 #                   listArticles -> list_articles
 #                   listGroups -> list_newsgroups
 #
+#   2023-07-26  Todd Valentic
+#               Support pathlib in poster
+#
 #
 ###########################################################################
 
+import collections
 import datetime
 import email
 import logging
@@ -523,8 +527,8 @@ class NewsTool:
         if host:
             self.set_server(host, port)
 
-        return nntplib.NNTP(host, 
-                            port=port, 
+        return nntplib.NNTP(self.server_host, 
+                            port=self.server_port, 
                             readermode=True, 
                             timeout=self.timeout)
 
@@ -708,8 +712,11 @@ class NewsPoster(NewsTool):
     def post(self, filenames=None, comment=None, date=None, headers=None):
         """Post files to newsgroup"""
 
-        if isinstance(filenames, str):
-            filenames = [filenames]
+        if filenames is not None:
+            if isinstance(filenames, str):
+                filenames = [filenames]
+            elif not isinstance(filenames, collections.abc.Iterable): 
+                filenames = [filenames]
 
         if not filenames:
             msg = MIMEText(comment)
@@ -980,8 +987,11 @@ class NewsPoller(NewsTool):
         try:
             server = self.open_server()
             _resp, count, low, high, name = server.group(self.newsgroup_header)
-        except:  # pylint: disable=bare-except
-            self.log.debug("Failed to get message numbers")
+        except nntplib.NNTPError as e:
+            self.log.debug("Failed to get message numbers: %s", e)
+            return None
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self.log.debug("Failed to get message numbers: %s", e)
             return None
 
         self.log.debug(f"Group {name} has {count} articles from {low} to {high}")

@@ -22,13 +22,13 @@ class EchoClient(ProcessClient):
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
-        self.connect = Directory(self)
+        self.directory = Directory(self)
 
-        self.rate = self.get_rate("rate", "10s")
+        self.rate = self.config.get_rate("rate", "10s")
 
         self.log.info('echo client')
 
-        self.echo = self.connect("echo")
+        self.echo = self.directory.connect("echo")
 
     def run(self):
         self.log.info("Starting")

@@ -12,7 +12,7 @@
 #
 ##########################################################################
 
-import functools
+from functools import partial
 from .accessmixin import AccessMixin
 
 import sapphire_config as sapphire
@@ -40,10 +40,8 @@ class ConfigComponent(sapphire.Component, AccessMixin):
 
     def __init__(self, prefix, name, config, parent, **kw):
         sapphire.Component.__init__(self, prefix, name, config, parent, **kw)
-        AccessMixin.__init__(self, parent, getters=False)
+        AccessMixin.__init__(self, parent)
 
         self.log = ComponentLog(f"{prefix}.{name}", parent.log)
 
-        setattr(
-            self, "get_components", functools.partial(self.get_components, parent=self)
-        )
+        self.config.get_components = partial(self.config.get_components, parent=self)

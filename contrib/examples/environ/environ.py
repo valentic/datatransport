@@ -29,7 +29,7 @@ class DisplayEnviron(ProcessClient):
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
-    def init(self): 
+    def init(self):
         super().init()
 
         self.print_environ()

@@ -21,16 +21,12 @@ class Demo(ProcessClient):
     def __init__(self, args):
         ProcessClient.__init__(self, args)
 
-    def init(self):
-        super().init()
-
         for key in self.options():
             if key.startswith('test.'):
                 try:
-                    value = self.get_bytes(key)
-                    self.log.info("%s: %s", key, self.get_bytes(key))
-                except:
-                    self.log.error('Problem parsing %s' % key)
+                    self.log.info("%s: %s", key, self.config.get_bytes(key))
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    self.log.error('Problem parsing %s: %s', key, e)
 
 if __name__ == "__main__":
     Demo(sys.argv).run()

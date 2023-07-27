@@ -32,8 +32,8 @@ class Spawner(ProcessClient):
     def main(self):
         """Main loop"""
 
-        rate = self.get_rate("spawn.rate", 10)
-        cmd = self.get("spawn.command", "pwd")
+        rate = self.config.get_rate("spawn.rate", 10)
+        cmd = self.config.get("spawn.command", "pwd")
 
         while self.wait(rate):
 
@@ -41,7 +41,7 @@ class Spawner(ProcessClient):
 
             try:
                 status, output = subprocess.getstatusoutput(cmd)
-            except BaseException: # pylint: disable=broad-except
+            except Exception: # pylint: disable=broad-exception-caught
                 self.log.exception("Problem starting child")
                 self.abort("Exiting")
 

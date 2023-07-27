@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Hello World example"""
 
 ##########################################################################
 #
@@ -11,27 +12,28 @@
 #
 ##########################################################################
 
-from datatransport import ProcessClient
-
 import sys
 
-class Client (ProcessClient):
+from datatransport import ProcessClient
+
+
+class Client(ProcessClient):
+    """Process Client"""
 
     def __init__(self, args):
         ProcessClient.__init__(self, args)
 
-    def init(self):
+        self.rate = self.config.get_rate("rate")
+        self.text = self.config.get("text")
 
-        self.rate = self.get_rate('rate')
-        self.text = self.get('text')
-
-        self.log.info(f'Log message every {self.rate.period}')
+        self.log.info("Log message every: %s", self.rate.period)
 
     def main(self):
+        """Main application"""
 
         while self.wait(self.rate):
             self.log.info(self.text)
 
-if __name__ == '__main__':
-    Client(sys.argv).run()
 
+if __name__ == "__main__":
+    Client(sys.argv).run()

@@ -1,50 +1,50 @@
 #!/usr/bin/env python3
+"""File posting example"""
 
 ##########################################################################
 #
 #   File post example
 #
-#   Periodically post a file to a news group 
+#   Periodically post a file to a news group
 #
 #   2022-10-10  Todd Valentic
 #               Initial implementation
 #
 ##########################################################################
 
-from datatransport import ProcessClient
-from datatransport import NewsPoster
-
 import sys
 import pathlib
 
-class Client (ProcessClient):
+from datatransport import ProcessClient
+from datatransport import NewsPoster
+
+
+class Client(ProcessClient):
+    """Process Client"""
 
     def __init__(self, args):
         ProcessClient.__init__(self, args)
 
         self.news_poster = NewsPoster(self)
 
-    def init(self):
+        self.rate = self.config.get_rate("rate")
+        self.text = self.config.get("text")
 
-        self.rate = self.get_rate('rate')
-        self.text = self.get('text')
-
-        self.log.info(f'Post message every {self.rate.period}')
+        self.log.info("Post message every: %s", self.rate.period)
 
     def main(self):
+        """Main application"""
 
-        filename = pathlib.Path('data.txt')
+        filename = pathlib.Path("data.txt")
 
         while self.wait(self.rate):
+            filename.write_text(self.text, encoding="utf-8")
 
-            with filename.open(mode='w') as message:
-                message.write(self.text)
-
-            self.news_poster.post(str(filename))
-            self.log.info('Posted %s' % filename)
+            self.news_poster.post(filename)
+            self.log.info("Posted %s", filename)
 
             filename.unlink()
 
-if __name__ == '__main__':
-    Client(sys.argv).run()
 
+if __name__ == "__main__":
+    Client(sys.argv).run()

@@ -48,6 +48,11 @@
 #               Use TransportConfig find_config_files()
 #               Use place holde {client.name} when showing config in debug 
 #
+#   2023-07-20  Todd Valentic
+#               Change error to debug if no clients listed
+#               Reduce default shutdown_timeout to 30s
+#               Change shutdown_timeout to timedelta 
+#
 #############################################################################
 
 import configparser
@@ -240,7 +245,7 @@ class ProcessGroup:
         self.grouplabel = processgroup.get("label", self.name)
         self.start_priority = processgroup.get_int("priority.start", 50)
         self.stop_priority = processgroup.get_int("priority.stop", 50)
-        self.shutdown_timeout = processgroup.get_int("shutdown.timeout", 120)
+        self.shutdown_timeout = processgroup.get_timedelta("shutdown.timeout", 30)
         self.report_rate = processgroup.get_int("shutdown.report.rate", 15)
 
         return config_files
@@ -326,7 +331,7 @@ class ProcessGroup:
                 clientnames = self.clients.keys()
 
         if not clientnames:
-            self.log.error("No clients listed")
+            self.log.debug("No clients listed")
             return
 
         clientnames = set(clientnames).intersection(self.clients)
@@ -353,7 +358,7 @@ class ProcessGroup:
                 self.clients[name].stop()
                 num_running += 1
 
-        timeout = time.time() + self.shutdown_timeout
+        timeout = time.time() + self.shutdown_timeout.total_seconds()
         report_time = time.time() + self.report_rate
 
         while time.time() < timeout and num_running > 0:

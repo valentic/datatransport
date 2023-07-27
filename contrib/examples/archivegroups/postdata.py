@@ -10,11 +10,11 @@
 #
 ##########################################################################
 
+import bz2
+import gzip
 import pathlib
 import sys
 import zipfile
-import gzip
-import bz2
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -31,7 +31,7 @@ class PostData(ProcessClient):
         super().init()
 
         self.news_poster = NewsPoster(self)
-        self.filenames = self.get_list("filenames")
+        self.filenames = self.config.get_list("filenames")
 
     def save_zip(self, filename, message):
         """Save as zip file"""
@@ -55,13 +55,13 @@ class PostData(ProcessClient):
     def main(self):
         """Main loop"""
 
-        rate = self.get_rate("rate", 60)
+        rate = self.config.get_rate("rate", 60)
 
         counter = 0
 
         while self.wait(rate):
 
-            now = self.current_time()
+            now = self.now()
             message = f"Index: {counter}"
 
             postnames = []

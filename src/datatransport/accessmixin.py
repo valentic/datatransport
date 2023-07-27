@@ -23,6 +23,10 @@
 #               Update imports
 #               currentTime -> current_time
 #
+#   2023-07-26  Todd Valentic
+#               Updated for transport3 / python3
+#               Use Root for base class 
+#
 #   SPDX-License-Identifier: GPL-3.0-or-later
 #   Copyright (C) 1999-2022 Todd Valentic
 #
@@ -34,20 +38,18 @@ from . import Root
 class AccessMixin(Root):
     """Connect a child class to common methods in the parent"""
 
-    def __init__(self, parent, getters=True):
-        if getters:
-            for key in dir(parent):
-                method = getattr(parent, key)
-                if callable(method) and key.startswith("get"):
-                    setattr(self, key, method)
+    def __init__(self, parent):
+
+        if not hasattr(self, 'config'):
+            self.config = parent.config
 
         self.parent = parent
         self.log = parent.log
         self.abort = parent.abort
+        self.exit = parent.exit
+        self.stop = parent.stop
         self.wait = parent.wait
-        self.put = parent.put
-        self.options = parent.options
-        self.current_time = parent.current_time
+        self.now = parent.now
         self.utc = parent.utc
         self.is_running = parent.is_running
         self.is_stopped = parent.is_stopped

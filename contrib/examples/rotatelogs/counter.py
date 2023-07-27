@@ -31,7 +31,7 @@ class Counter(ProcessClient):
     def main(self):
         """Main loop"""
 
-        rate = self.get_rate("rate", 1)
+        rate = self.config.get_rate("rate", 1)
         counter = 0
 
         while self.wait(rate):

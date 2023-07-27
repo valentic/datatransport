@@ -28,6 +28,9 @@
 #               Rework implementation with regex instead of eval
 #               setValue -> set_value
 #
+#   2023-07-26  Todd Valentic
+#               Missing check for pattern 
+#
 #   SPDX-License-Identifier: GPL-3.0-or-later
 #   Copyright (C) 1999-2022 Todd Valentic
 #
@@ -81,12 +84,12 @@ def parse_patterns(string: str) -> list:
 class PatternTemplate:
     """String pattern replacement"""
 
-    def __init__(self, patttern: str, sep: str=None):
-        self.patttern = patttern
+    def __init__(self, pattern: str, sep: str=None):
+        self.pattern = pattern
         self.sep = sep
         self.value = None
 
-    def set_value(self, value: str) -> None:
+    def set_value(self, value: Union[str, list, dict]) -> None:
         """Cache the value of the replacement string"""
 
         self.value = value
@@ -124,12 +127,12 @@ class PatternTemplate:
 
 
     def __call__(self, src: str, value: str=None) -> str:
-        """Replace <patttern> with value"""
+        """Replace <pattern> with value"""
 
-        if value is None:
-            value = self.value
-        else:
+        if value is not None:
             self.set_value(value)
+
+        value = self.value
 
         if value is None:
             return src
@@ -138,7 +141,9 @@ class PatternTemplate:
             value = value.split(self.sep)
 
         for entry in parse_patterns(src):
+            if not entry.startswith(self.pattern):
+                continue
             v = self.lookup_value(entry, value, self.sep)
-            src = src.replace(f'<{entry}>', v)
+            src = src.replace(f'<{entry}>', str(v))
 
         return src

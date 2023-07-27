@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""Post data files component"""
+
 ############################################################################
 #
 #   PostDataFiles
@@ -114,7 +117,7 @@
 #               Convert headers in post to a dict from a list
 #
 #   2009-11-24  Todd Valentic
-#               Use current_time()
+#               Use now()
 #
 #   2015-11-23  Todd Valentic
 #               Add md5 checksum header.
@@ -129,8 +132,11 @@
 #                   commands -> subprocess
 #                   removeFile -> remove_file
 #                   sizeDesc -> size_desc
-#                   currentTime -> current_time
+#                   currentTime -> now
 #                   NewsPoster
+#
+#   2023-07-26  Todd Valentic
+#               Updated for transport3 / python3 
 #
 ############################################################################
 
@@ -150,6 +156,8 @@ from datatransport.utilities import size_desc
 
 
 class PostDataFiles(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
@@ -158,14 +166,14 @@ class PostDataFiles(ProcessClient):
         self.input_name = self.get("input.name", "*.DAT")
         self.input_path = self.get("input.path", ".")
         self.include_current = self.get_boolean("include_current", False)
-        self.compress = self.get_boolean("compress", 1)
+        self.compress = self.get_boolean("compress", True)
         self.remove_files = self.get_boolean("remove_files", False)
-        self.max_files = self.get_int("max_files", None)
+        self.max_files = self.get_int("max_files")
         self.max_size = self.get_bytes("max_size", "20Mb")
         self.check_index = self.get_boolean("check_index", True)
         self.check_size = self.get_boolean("check_size", True)
 
-        self.pollrate = self.get_rate("pollrate", "5:00")
+        self.pollrate = self.get_rate("pollrate", "5")
         self.filedate = self.get_callback("filedate", self.filedate_callback)
 
         self.timefile = "timestamp"
@@ -177,7 +185,7 @@ class PostDataFiles(ProcessClient):
             t = time.mktime((1975, 1, 1, 0, 0, 0, 0, 0, 0))
             os.utime(self.timefile, (t, t))
 
-        if self.get_boolean("startCurrent", 0) == 1:
+        if self.get_boolean("startCurrent", False) == 1:
             os.utime(self.timefile, None)
 
         if not os.path.isfile(self.indexfile):
@@ -202,7 +210,7 @@ class PostDataFiles(ProcessClient):
 
         for chunk in range(numchunks):
             data = file.read(self.max_size)
-            chunkname = "chunk.%03d" % chunk
+            chunkname = f"chunk.{chunk:03d}"
             open(chunkname, "wb").write(data)
             chunks.append(chunkname)
 
@@ -210,7 +218,7 @@ class PostDataFiles(ProcessClient):
 
         return chunks
 
-    def get_checksumg(self, filename):
+    def get_checksum(self, filename):
         # Shell out - some files might be quite large
         status, output = subprocess.getstatusoutput("md5sum %s" % filename)
 
@@ -225,7 +233,7 @@ class PostDataFiles(ProcessClient):
         part = 1
         numparts = len(files)
         basename = os.path.basename(filename)
-        checksum = self.get_checksumg(filename)
+        checksum = self.get_checksum(filename)
 
         for file in files:
 
@@ -283,7 +291,7 @@ class PostDataFiles(ProcessClient):
 
         if self.compress and not isCompressed:
 
-            starttime = self.current_time()
+            starttime = self.now()
 
             self.log.debug("  - compressing file")
             data = open(file).read()
@@ -297,7 +305,7 @@ class PostDataFiles(ProcessClient):
             else:
                 zippct = 0
 
-            totaltime = self.current_time() - starttime
+            totaltime = self.now() - starttime
             self.log.info(
                 "  - %s -> %s (%d%%) %s"
                 % (size_desc(orgsize), size_desc(zipsize), zippct, totaltime)

@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""FileWatch component"""
+
+# pylint: disable=broad-exception-caught
+
 ##########################################################################
 #
 #   FileWatch
@@ -74,12 +79,12 @@
 #                   removeFile -> remove_file
 #                   NewsPoster
 #
+#   2023-07026  Todd Valentic
+#               Use new config interface
+#
 ##########################################################################
 
-import os
-import glob
 import sys
-import time
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -87,45 +92,42 @@ from datatransport.utilities import remove_file
 
 
 class FileWatch(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
         self.news_poster = NewsPoster(self)
 
-        self.pollrate = self.get_timedelta("watch.rate", 60)
-        self.remove_files = self.get_boolean("watch.removefiles", True)
-        self.group_files = self.get_boolean("watch.groupfiles", False)
+        self.pollrate = self.config.get_rate("watch.rate", 60)
+        self.remove_files = self.config.get_boolean("watch.removefiles", True)
+        self.group_files = self.config.get_boolean("watch.groupfiles", False)
 
-        path = self.get("watch.path", "")
-        files = self.get("watch.files", "").split()
+        self.watchpath = self.config.get_path("watch.path", ".")
+        self.filespecs = self.config.get_list("watch.files")
 
-        if not files:
+        if not self.filespecs:
             self.abort("No watch files listed in the config file.")
 
-        try:
-            self.watchfiles = [os.path.join(path, file) for file in files]
-        except:
-            self.log.exception("Problem parsing watchfiles list")
-            self.abort("Aborting")
+        self.log.info("Posting to %s", self.config.get("post.newsgroup"))
+        self.log.info("Watching path: %s", self.watchpath)
+        self.log.info("Watching for: %s", self.filespecs)
 
-        self.log.info("Posting to %s" % self.get("post.newsgroup"))
-        self.log.info("Watching for: %s" % self.watchfiles)
-
-    def watch_files(self):
+    def find_files(self):
+        """Find files to post"""
 
         readyfiles = []
 
-        for filespec in self.watchfiles:
-            files = [f for f in glob.glob(filespec) if os.path.isfile(f)]
+        for filespec in self.filespecs:
+            files = [f for f in self.watchpath.glob(filespec) if f.is_file()]
             readyfiles.extend(files)
 
-        readyfiles.sort()
-
-        return readyfiles
+        return sorted(readyfiles)
 
     def process(self):
+        """Process files ready to post"""
 
-        files = self.watch_files()
+        files = self.find_files()
 
         if not files:
             self.log.debug("No files present, sleeping")
@@ -135,27 +137,28 @@ class FileWatch(ProcessClient):
             files = [files]
 
         for filegroup in files:
-
             try:
-                starttime = time.time()
+                starttime = self.now()
                 self.news_poster.post(filegroup)
-                elapsed = time.time() - starttime
-                self.log.info("Files posted (%.2f s): %s" % (elapsed, filegroup))
-            except:
+                elapsed = self.now() - starttime
+                self.log.info("Files posted (%s): %s", elapsed, filegroup)
+            except Exception:
                 self.log.exception("Problem posting files")
                 return
 
             if self.remove_files:
                 try:
                     remove_file(filegroup)
-                except:
-                    self.log.exception("Problem deleting file: %s" % filegroup)
+                except Exception:
+                    self.log.exception("Problem deleting file: %s", filegroup)
 
     def main(self):
+        """Main application"""
 
         while self.wait(self.pollrate):
             self.process()
 
 
 def main():
+    """Script entry"""
     FileWatch(sys.argv).run()

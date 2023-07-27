@@ -28,20 +28,21 @@ class Watch(ConfigComponent):
 
         self.news_poster = NewsPoster(self)
 
-        self.path = self.get_path("path", ".")
-        self.label = self.get("label", "")
-        self.host = self.get("host", "")
-        self.option = self.get("option", "")
-        self.desc = self.get("desc", "")
-        self.subject = self.get("subject", "")
+        self.path = self.config.get_path("path", ".")
+        self.label = self.config.get("label", "")
+        self.host = self.config.get("host", "")
+        self.option = self.config.get("option", "")
+        self.desc = self.config.get("desc", "")
+        self.subject = self.config.get("subject", "")
 
-        self.log.info("Component: %s", name)
+        self.log.info("Component: %s", self.name)
         self.log.info("  path:    %s", self.path)
         self.log.info("  label:   %s", self.label)
         self.log.info("  host:    %s", self.host)
         self.log.info("  option:  %s", self.option)
         self.log.info("  desc:    %s", self.desc)
         self.log.info("  subject: %s", self.subject)
+        self.log.info("  options: %s", self.config.options())
 
 
 class Demo(ProcessClient):
@@ -50,9 +51,7 @@ class Demo(ProcessClient):
     def __init__(self, args):
         ProcessClient.__init__(self, args)
 
-    def init(self):
-
-        self.components = self.get_components("watches", factory=Watch)
+        self.components = self.config.get_components("watches", factory=Watch)
 
         self.log.info("Loaded %d components:", len(self.components))
 

@@ -12,6 +12,30 @@ def test_pattern_replace():
     result = replaceRule(src, value)
     assert result == f'{value}' 
 
+def test_pattern_no_replace():
+    replaceRule = PatternTemplate('rule')
+    src = '<otherrule>'
+    value = 'hello world'
+    result = replaceRule(src, value)
+    assert result == '<otherrule>' 
+
+def test_pattern_int_value():
+    replaceRule = PatternTemplate('rule')
+    src = '<rule>'
+    value = 0 
+    result = replaceRule(src, value)
+    assert result == str(value) 
+
+def test_pattern_multiple():
+    replaceRule = PatternTemplate('rule')
+    replaceName = PatternTemplate('name')
+    src = '<rule>-<name>'
+    rule_value = 'a'
+    name_value = 'b'
+    result = replaceRule(src, rule_value)
+    result = replaceName(result, name_value)
+    assert result == 'a-b'
+
 def test_pattern_embedded():
     replaceRule = PatternTemplate('rule')
     src = 'Before <rule> after'

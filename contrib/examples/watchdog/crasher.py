@@ -35,7 +35,7 @@ class Crasher(ProcessClient):
     def main(self):
         """Main loop"""
 
-        lifetime = self.get_rate("lifetime", 10)
+        lifetime = self.config.get_rate("lifetime", 10)
 
         while self.wait(lifetime):
             self.log.info("About to crash!")

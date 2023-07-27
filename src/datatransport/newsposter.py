@@ -113,11 +113,15 @@
 #
 #   2022-10-06  Todd Valentic
 #               Port to transport3 / python3
-#                   newsPoster -> news_poster
-#                   createNewsPoster -> _poster_create
+#                   newsPoster -> newsposter
+#                   createNewsPoster -> postercreate
 #
 #   2023-07-04  Todd Valentic
 #               Convert fom being a mixin class
+#
+#   2023-07-24  Todd Valentic
+#               Ensure enable is a boolean
+#               Use AccessMixin
 #
 ##############################################################################
 
@@ -125,42 +129,52 @@ import fnmatch
 import nntplib
 import socket
 
+from datatransport import AccessMixin
 from datatransport import newstool
 
 
-class NewsPoster:
+class NewsPoster(AccessMixin):
     """Data Transport NewsPoster"""
 
     def __init__(self, parent, **kwargs):
-        self._poster = self._create_news_poster(parent, **kwargs)
+        self.poster = None
+        AccessMixin.__init__(self, parent)
+
+        self.poster = self.create_newsposter(**kwargs)
 
     def __getattr__(self, name):
-        return getattr(self._poster, name)
+        if self.poster:
+            return getattr(self.poster, name)
+        raise AttributeError()
 
-    def _get_headers(self, parent, prefix):
+    def get_headers(self, prefix):
+        """Get extra headers from config file"""
+
         headers = {}
 
-        for header in parent.get_list(f"{prefix}.headers"):
+        for header in self.config.get_list(f"{prefix}.headers"):
             try:
                 name, value = [v.strip() for v in header.split("=", 1)]
             except (AttributeError, ValueError):
-                parent.log.error(f"Failed to process header: {header}")
+                self.log.error(f"Failed to process header: {header}")
                 continue
 
             headers[name.upper()] = value
 
-        for key in fnmatch.filter(parent.options(), f"{prefix}.header.*"):
+        for key in fnmatch.filter(self.config.options(), f"{prefix}.header.*"):
             name = key.replace(f"{prefix}.header.", "").strip().upper()
-            headers[name] = parent.get(key).strip()
+            headers[name] = self.config.get(key).strip()
 
         if headers:
-            parent.log.info("Extra headers:")
+            self.log.info("Extra headers:")
             for name, value in headers.items():
-                parent.log.info(f"  {name}={value}")
+                self.log.info(f"  {name}={value}")
 
         return headers
 
-    def _create_newsgroups(self, parent, control, newsgroups):
+    def create_newsgroups(self, control, newsgroups):
+        """Create newsgroup on server if missing"""
+
         host = f"{control.server_host}:{control.server_port}"
 
         control.open_server()
@@ -168,46 +182,46 @@ class NewsPoster:
         for newsgroup in newsgroups:
             if not control.has_newsgroup(newsgroup):
                 control.newgroup(newsgroup)
-                parent.log.info(f"Creating the post newsgroup {newsgroup} on {host}")
+                self.log.info(f"Creating the post newsgroup {newsgroup} on {host}")
 
                 while not control.has_newsgroup(newsgroup):
-                    parent.log.info("Waiting for newsgroup to show up")
+                    self.log.info("Waiting for newsgroup to show up")
 
-                    if not parent.wait(15):
-                        parent.abort("Exiting")
+                    if not self.wait(15):
+                        self.abort("Exiting")
 
-                parent.log.info(f"Newsgroup {newsgroup} on {host} is ready")
+                self.log.info(f"Newsgroup {newsgroup} on {host} is ready")
 
     # pylint: disable=too-many-locals
 
-    def _create_news_poster(self, parent, prefix="post", quiet=False):
+    def create_newsposter(self, prefix="post", quiet=False):
         """Create a news poster"""
 
-        newsserver = parent.get(f"{prefix}.newsserver", "localhost")
-        port = parent.get_int(f"{prefix}.newsserver.port", 119)
-        newsgroups = parent.get_list(f"{prefix}.newsgroup")
-        enable = parent.get_boolean(f"{prefix}.enable", True)
-        creategroup = parent.get_boolean(f"{prefix}.creategroup", True)
+        host = self.config.get(f"{prefix}.newsserver", "localhost")
+        port = self.config.get_int(f"{prefix}.newsserver.port", 119)
+        newsgroups = self.config.get_list(f"{prefix}.newsgroup")
+        enable = self.config.get_boolean(f"{prefix}.enable", True)
+        creategroup = self.config.get_boolean(f"{prefix}.creategroup", True)
 
-        headers = self._get_headers(parent, prefix)
+        headers = self.get_headers(prefix)
 
         newsgroups = [name.strip().lower() for name in newsgroups]
 
         if not newsgroups and not quiet:
-            parent.log.warning(
+            self.log.warning(
                 f"No posting news group specified (expected {prefix}.newsgroup)"
             )
 
-        from_header = parent.get(f"{prefix}.from", "transport@localhost.net")
-        subject_header = parent.get(f"{prefix}.subject", "Unknown subject")
+        from_header = self.config.get(f"{prefix}.from", "transport@localhost.net")
+        subject_header = self.config.get(f"{prefix}.subject", "Unknown subject")
 
         poster = newstool.NewsPoster()
-        poster.set_server(newsserver, port)
+        poster.set_server(host, port)
         poster.set_newsgroup(",".join(newsgroups))
-        poster.set_enable(enable and newsgroups)
+        poster.set_enable(enable and len(newsgroups) > 0)
         poster.set_from(from_header)
         poster.set_subject(subject_header)
-        poster.set_log(parent.log)
+        poster.set_log(self.log)
 
         for key, value in headers.items():
             poster.set_header(key, value)
@@ -215,23 +229,21 @@ class NewsPoster:
         # Create the group if we need to
 
         control = newstool.NewsControl()
-        control.set_server(newsserver, port)
+        control.set_server(host, port)
 
         if creategroup:
-            while parent.is_running():
+            while self.is_running():
                 try:
-                    self._create_newsgroups(parent, control, newsgroups)
+                    self.create_newsgroups(control, newsgroups)
                     break
                 except socket.error as e:
-                    parent.abort(
-                        f"Error connecting to news server: {newsserver}:{port} {e}"
-                    )
+                    self.abort(f"Error connecting to news server: {host}:{port} {e}")
                 except nntplib.NNTPError as e:
-                    parent.abort(f"Error creating news group: {newsserver}:{port} {e}")
+                    self.abort(f"Error creating news group: {host}:{port} {e}")
                 except:  # pylint: disable=bare-except
-                    parent.log.exception("Error creating group:")
-                    parent.abort("Cannot create the posting newsgroup")
+                    self.log.exception("Error creating group:")
+                    self.abort("Cannot create the posting newsgroup")
 
-                parent.wait(15)
+                self.wait(15)
 
         return poster

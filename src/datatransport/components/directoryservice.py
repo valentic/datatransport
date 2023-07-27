@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""Directory Service"""
 
 ##########################################################################
 #
@@ -26,9 +27,11 @@
 #   2022-10-07  Todd Valentic
 #               Reorder imports
 #
+#   2023-07-27  Todd Valentic
+#               Updated for transport3 / python3
+#
 ##########################################################################
 
-import os
 import sys
 
 from datatransport import ProcessClient
@@ -37,48 +40,56 @@ from datatransport import XMLRPCServer
 
 
 class Service(ConfigComponent):
+    """Service Component"""
+
     def __init__(self, name, config, parent, **kw):
         ConfigComponent.__init__(self, "service", name, config, parent, **kw)
 
-        self.host = self.get("host", "localhost")
-        self.port = self.get_int("port")
-        self.label = self.get("label")
-        self.url = "http://%s:%s" % (self.host, self.port)
-        self.hold = self.get_boolean("hold", True)
+        self.host = self.config.get("host", "localhost")
+        self.port = self.config.get_int("port")
+        self.scheme = self.config.get("scheme", "http")
+        self.label = self.config.get("label")
+        self.url = f"{self.scheme}://{self.host}:{self.port}"
+        self.hold = self.config.get_boolean("hold", True)
 
         if not self.port:
             raise ValueError("No port specified")
 
 
 class DirectoryService(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
-        port = self.get_int("directory.port", 8411)
+        port = self.config.get_int("directory.port", 8411)
 
-        self.xmlserver = XMLRPCServer(self, 
-            queue_size=100, port=port, label="Directory"
+        self.xmlserver = XMLRPCServer(
+            self, queue_size=100, port=port, label="Directory"
         )
         self.main = self.xmlserver.main
 
         self.xmlserver.register_function(self.list)
         self.xmlserver.register_function(self.lookup, "get")
 
-        self.services = self.get_components("services", factory=Service)
+        self.services = self.config.get_components("services", factory=Service)
 
         self.log.info("Services:")
         for service in self.services.values():
-            self.log.info(f"  - {service.label} ({service.host}:{service.port})")
+            self.log.info("  - %s (%s:%s)", service.label, service.host, service.port)
 
     def list(self):
+        """List services"""
+
         return list(self.services)
 
     def lookup(self, name, key):
+        """Lookup data on service component"""
 
         if name in self.services:
             return getattr(self.services[name], key)
 
-        raise KeyError("Unknown service: %s" % name)
+        raise KeyError(f"Unknown service: {name}")
 
 
 def main():

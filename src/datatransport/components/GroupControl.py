@@ -68,6 +68,9 @@
 #                   exception handling
 #                   NewsPoller, NewsPoster
 #
+#   2023-07-28  Todd Valentic
+#               Updated for transport3 / python3
+#
 ###########################################################################
 
 import os
@@ -88,8 +91,8 @@ class GroupControl(ProcessClient):
         self.news_poller = NewsPoller(self, callback=self.process)
         self.main = self.news_poller.main
 
-        self.prefix = self.get("prefix", "")
-        self.postfix = self.get("postfix", "")
+        self.prefix = self.config.get("prefix", "")
+        self.postfix = self.config.get("postfix", "")
 
         self.connect()
 

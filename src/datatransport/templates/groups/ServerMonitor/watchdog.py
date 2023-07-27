@@ -50,6 +50,9 @@
 #
 #   2022-10-06  Todd Valentic
 #               Updated for transport3/python3
+#   
+#   2023-07-26  Todd Valentic
+#               Use config getters
 #
 ############################################################################
 
@@ -70,7 +73,7 @@ class Watchdog(ProcessClient):
         super().init()
 
         self.news_poster = NewsPoster(self)
-        self.rate = self.get_rate("rate", "5m")
+        self.rate = self.config.get_rate("rate", "5m")
 
     def get_client_pids(self):
         """Query server for expected client PIDs"""
@@ -103,7 +106,7 @@ class Watchdog(ProcessClient):
         body.append(f"      Client name: {client_name}")
         body.append(f"       Group name: {group_name}")
         body.append(f"       Process ID: {pid}")
-        body.append(f"       Time stamp: {self.current_time()}")
+        body.append(f"       Time stamp: {self.now()}")
         body.append("")
         body.append("  The client has been restarted.")
         body.append("")

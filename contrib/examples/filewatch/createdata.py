@@ -33,10 +33,10 @@ class CreateData(ProcessClient):
     def init(self):
         super().init()
 
-        self.rate = self.get_rate("rate", 60)
-        self.path = self.get_path("output.path")
-        self.names = self.get_list("output.names")
-        self.maxbytes = self.get_bytes("output.maxsize", "10KB")
+        self.rate = self.config.get_rate("rate", 60)
+        self.path = self.config.get_path("output.path")
+        self.names = self.config.get_list("output.names")
+        self.maxbytes = self.config.get_bytes("output.maxsize", "10KB")
 
         if not self.names:
             self.abort("No output names (output.names)")

@@ -1,3 +1,17 @@
+2023-07-20  Todd Valentic
+    - ProcessGroup. Do not log error if no clients listed
+    - ProcessGroup. Change default shutdown timeout to be 30s
+    - ProcessGroup. Change shutdown timeout to be a timedelta
+    - ProcessClient. Add stop() to request process to stop.
+    - NewsTool. Ensure enable is boolean
+    - PatternTemplate. Missing pattern check. Update test.
+    - NewsPoller. Code cleanup. Use AccessMixin
+    - NewsPoster. Code cleanup. Use AccessMixin
+    - NewsTool. Fix host/port setting
+    - ProcessClient. Make sure to logout in abort() 
+
+    - Release 3.0.7
+
 2023-07-12  Todd Valentic
     - Make sure viewlog opens new files
     - Release 3.0.6

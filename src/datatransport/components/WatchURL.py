@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""WatchURL Component"""
+
 #####################################################################
 #
 #   WatchURL
@@ -66,6 +69,9 @@
 #                   urlparse -> urllib.parse
 #                   removeFile -> remove_file
 #                   NewsPoster
+#
+#   2023-07-26  Todd Valentic
+#               Updated for transport3 / python3
 #
 #####################################################################
 
@@ -146,28 +152,26 @@ class WatchURL(ProcessClient):
 
         self.news_poster = NewsPoster(self)
 
-        self.pollrate = self.get_timedelta("pollrate", 600).seconds
-        self.sync = self.get_boolean("pollrate.sync", False)
-        self.offset = self.get_timedelta("pollrate.offset", 0).seconds
-        self.retryrate = self.get_timedelta("retryrate", 60).seconds
-        self.timeout = self.get_timedelta("timeout", 60).seconds
+        self.pollrate = self.config.get_rate("pollrate", '10m')
+        self.retryrate = self.config.get_rate("retryrate", 60)
+        self.timeout = self.config.get_timedelta("timeout", 60)
 
-        self.url = self.get("url", None)
-        self.include_names = self.get("images", "*").split()
-        self.exclude_names = self.get("images.exclude", "").split()
-        self.check_headers = self.get_boolean("headers.enable", True)
-        self.exclude_headers = self.get("headers.exclude", "Date").split()
-        self.rename_rules = self.get("rename", "[]")
-        self.save_body = self.get_boolean("save.body", True)
-        self.save_images = self.get_boolean("save.images", False)
-        self.save_thumbnails = self.get_boolean("save.thumbnails", False)
-        self.thumbnail_cmd = self.get(
+        self.url = self.config.get("url", None)
+        self.include_names = self.config.get_list("images", "*")
+        self.exclude_names = self.config.get_list("images.exclude", "")
+        self.check_headers = self.config.get_boolean("headers.enable", True)
+        self.exclude_headers = self.config.get_list("headers.exclude", "Date")
+        self.rename_rules = self.config.get("rename", "[]")
+        self.save_body = self.config.get_boolean("save.body", True)
+        self.save_images = self.config.get_boolean("save.images", False)
+        self.save_thumbnails = self.config.get_boolean("save.thumbnails", False)
+        self.thumbnail_cmd = self.config.get(
             "thumbnails.cmd", "convert -geometry 125x125 -sharpen 2x2"
         )
-        self.thumbnail_exts = self.get("thumbnails.ext", ".jpg .png .gif").split()
-        self.thumbnail_name = self.get("thumbnails.name", "%s-thumbnail.jpg")
+        self.thumbnail_exts = self.config.get_list("thumbnails.ext", ".jpg .png .gif")
+        self.thumbnail_name = self.config.get("thumbnails.name", "%s-thumbnail.jpg")
 
-        socket.setdefaulttimeout(self.timeout)
+        socket.setdefaulttimeout(self.timeout.total_seconds())
 
         try:
             self.rename_rules = eval(self.rename_rules)
@@ -180,7 +184,7 @@ class WatchURL(ProcessClient):
 
         scheme = urlparse(self.url)[0]
 
-        if self.save_images and scheme != "http":
+        if self.save_images and not scheme.startswith("http"):
             self.abort("Can only save images from http sites")
 
         self.parser = Parser(self.include_names, self.exclude_names)
@@ -271,7 +275,7 @@ class WatchURL(ProcessClient):
 
         for pattern, result in self.rename_rules:
             if fnmatch.fnmatch(filename, pattern):
-                return self.current_time().strftime(result)
+                return self.now().strftime(result)
 
         return filename
 
@@ -329,32 +333,29 @@ class WatchURL(ProcessClient):
 
     def main(self):
 
-        if self.sync:
-            self.wait(self.pollrate, sync=True, offset=self.offset)
+        self.wait(self.pollrate)
 
         while self.is_running():
 
             try:
                 urls = self.gather_urls()
             except:
-                self.log.error("Problem gathering URLs")
-                self.log.exception("Traceback:")
+                self.log.exception("Problem gathering URLs")
                 self.wait(self.retryrate)
                 continue
 
             if not urls:
                 self.log.debug("No urls to check")
-                self.wait(self.pollrate, sync=self.sync, offset=self.offset)
+                self.wait(self.pollrate)
                 continue
 
             try:
                 if self.check_headers and not self.headers_changed(urls):
                     self.log.debug("The headers have not changed")
-                    self.wait(self.pollrate, sync=self.sync, offset=self.offset)
+                    self.wait(self.pollrate)
                     continue
             except:
-                self.log.error("Problem checking headers")
-                self.log.exception("Traceback:")
+                self.log.exception("Problem checking headers")
                 self.wait(self.retryrate)
                 continue
 
@@ -370,7 +371,7 @@ class WatchURL(ProcessClient):
                 if filenames:
                     try:
                         self.news_poster.post(filenames)
-                        self.log.info("New files detected, posting %s" % filenames)
+                        self.log.info("New files detected, posting %s", filenames)
                     except:
                         self.log.exception("Error posting to the news server")
                 else:
@@ -380,7 +381,7 @@ class WatchURL(ProcessClient):
 
             remove_file(filenames)
 
-            self.wait(self.pollrate, sync=self.sync, offset=self.offset)
+            self.wait(self.pollrate)
 
 
 def main():

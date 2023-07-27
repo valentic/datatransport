@@ -91,7 +91,7 @@ class XMLRPCServer(SimpleXMLRPCServer):
 
             self.directory = Directory(parent)
 
-            servicename = parent.get("service.name")
+            servicename = parent.config.get("service.name")
 
             if not servicename:
                 parent.abort("No service.name found")
