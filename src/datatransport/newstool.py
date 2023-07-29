@@ -417,7 +417,7 @@ def save_files(message, default="body.txt", path=".", write=True):
             filename = path / default
             make_path(filename)
             filename.write_text(body)
-        return [default]
+        return [filename]
 
     filenames = []
 

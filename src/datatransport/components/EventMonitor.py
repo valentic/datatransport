@@ -1,4 +1,7 @@
-############################################################
+#!/usr/bin/env python3
+"""Event Monitor Component"""
+
+##########################################################################
 #
 #   Event Monitor
 #
@@ -20,7 +23,10 @@
 #                   use get_ methods
 #                   use sapphire.Parser
 #
-############################################################
+#   2023-07-27  Todd Valentic
+#               Updated for transport3 / python3
+#
+##########################################################################
 
 import os
 import datetime
@@ -108,7 +114,7 @@ class Member(ConfigComponent):
     def update(self, state, timestamp=None):
 
         if timestamp is None:
-            timestamp = datetime.datetime.now(utc)
+            timestamp = self.now()
 
         self.current.update(timestamp)
 

@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""Newsgroup Monitor"""
+
 #####################################################################
 #
 #   Newsgroup Monitor
@@ -22,6 +25,9 @@
 #                   StringIO -> io.StringIO
 #               NewsPoller, NewsPoster
 #
+#   2023-07-29  Todd Valentic
+#               Updated for transport3 / python3
+#
 #####################################################################
 
 import io
@@ -33,32 +39,9 @@ from datatransport import NewsPoller
 from datatransport import ConfigComponent
 from datatransport.components import EventMonitor
 
-
-class FeedGroup(ConfigComponent):
-    def __init__(self, name, parent):
-        ConfigComponent.__init__(self, "feedgroup", name, parent)
-
-        self.log.info("  Feed group: %s" % name)
-
-        localvars = {"feedgroup": name, "section": "%(feedgroup)s:%(feed)s"}
-
-        for key, option in self.optionsdict().items():
-            value = self.get(option, raw=True)
-            localvars["feedgroup." + key] = value
-
-        feeds_dict = self.get_components("feeds", Feed, vars=localvars)
-        self.feeds = feeds_dict.values()
-
-    def check(self):
-
-        for feed in self.feeds:
-            try:
-                feed.check()
-            except:
-                self.log.exception("Problem checking %s" % feed.name)
-
-
 class Feed(EventMonitor.Member):
+    """Feed event monitor"""
+
     def __init__(self, *pos, **kw):
         EventMonitor.Member.__init__(self, "feed", *pos, **kw)
 
@@ -165,7 +148,35 @@ class Feed(EventMonitor.Member):
         return subject, message
 
 
+class FeedGroup(ConfigComponent):
+    """Feed group component"""
+
+    def __init__(self, name, config, parent):
+        ConfigComponent.__init__(self, "feedgroup", name, config, parent)
+
+        self.log.info("  Feed group: %s", name)
+
+        localvars = {"feedgroup": name, "section": "%(feedgroup)s:%(feed)s"}
+
+        # TBD - Do we really need to forward there vars?
+
+        for key, option in self.optionsdict().items():
+            value = self.get(option, raw=True)
+            localvars["feedgroup." + key] = value
+
+        self.feeds = self.config.get_components("feeds", factory=Feed, vars=localvars)
+
+    def check(self):
+
+        for feed in self.feeds.values():
+            try:
+                feed.check()
+            except:
+                self.log.exception("Problem checking %s", feed.name)
+
 class NewsgroupMonitor(ProcessClient):
+    """Process client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
@@ -175,15 +186,15 @@ class NewsgroupMonitor(ProcessClient):
 
         self.log.info("Loading feed groups")
 
-        self.feedgroups = self.get_components("feedgroups", FeedGroup).values()
+        self.feedgroups = self.config.get_components("feedgroups", factory=FeedGroup)
 
         if not self.feedgroups:
             self.feedgroups = [FeedGroup("", self)]
 
         self.feeds = {}
 
-        for feedgroup in self.feedgroups:
-            for feed in feedgroup.feeds:
+        for feedgroup in self.feedgroups.values():
+            for feed in feedgroup.feeds.values():
                 key = "%s:%s" % (feedgroup.name, feed.name)
                 self.feeds[key] = feed
 

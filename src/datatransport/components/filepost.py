@@ -1,3 +1,6 @@
+#!/usr/bin/env/python3
+"""File Post Component"""
+
 ##########################################################################
 #
 #   FilePost
@@ -38,12 +41,12 @@
 #                   removeFile -> remove_file
 #                   NewsPoster
 #
+#   2023-07-27  Todd Valentic
+#               Updated for transport3 / python3
+#
 ##########################################################################
 
-import os
 import sys
-import glob
-import time
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -52,77 +55,99 @@ from datatransport.utilities import remove_file
 
 
 class Watcher(ConfigComponent):
-    def __init__(self, name, parent):
-        ConfigComponent.__init__(self, "watch", name, parent)
-    
+    """Watch group component"""
+
+    def __init__(self, *p, **kw):
+        ConfigComponent.__init__(self, "watch", *p, **kw)
+
         self.news_poster = NewsPoster(self)
 
-        self.file_patterns = self.get_list("files")
-        self.remove_files = self.get_boolean("removefiles", True)
-        self.group_files = self.get_boolean("groupfiles", False)
+        self.watchpath = self.config.get_path("path", ".")
+        self.filespecs = self.config.get_list("files")
+        self.remove_files = self.config.get_boolean("removefiles", True)
+        self.group_files = self.config.get_boolean("groupfiles", False)
 
-        self.log.info("Watch: %s" % name)
-        self.log.info("  Posting to %s" % self.get("post.newsgroup"))
-        self.log.info("  Watching for: %s" % self.file_patterns)
+        if not self.filespecs:
+            self.abort("No watch files listed in the config file")
+
+        self.log.info("Posting to %s", self.config.get("post.newsgroup"))
+        self.log.info("Watching path: %s", self.watchpath)
+        self.log.info("Watching for: %s", self.filespecs)
 
     def find_files(self):
+        """Find matching files to post"""
 
         filenames = []
 
-        for pattern in self.file_patterns:
-            filenames.extend(glob.glob(pattern))
+        for filespec in self.filespecs:
+            filenames.extend(self.watchpath.glob(filespec))
 
-        filenames = [f for f in filenames if os.path.isfile(f)]
-        filenames.sort()
+        filenames = [f for f in filenames if f.is_file()]
 
-        if self.group_files and filenames:
-            filenames = [filenames]
+        return sorted(filenames)
 
-        return filenames
+    def process(self):
+        """Check for new files"""
 
-    def check(self):
+        filenames = self.find_files()
 
-        files = self.find_files()
-
-        if not files:
-            self.log.debug("No files present, sleeping")
+        if not filenames:
+            self.log.debug("No files present")
             return
 
-        for filegroup in files:
+        if self.group_files:
+            filenames = [filenames]
+
+        for filegroup in filenames:
+            starttime = self.now()
 
             try:
-                starttime = time.time()
                 self.news_poster.post(filegroup)
-                elapsed = time.time() - starttime
-                self.log.info("Files posted (%.2f s): %s" % (elapsed, filegroup))
-            except:
-                self.log.exception("Problem posting files")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                self.log.exception("Problem posting files: %s", e)
                 return
+
+            elapsed = (self.now() - starttime).total_seconds()
+            
+            if isinstance(filegroup, list):
+                names = [str(n) for n in filegroup]
+            else:
+                names = filegroup
+
+            self.log.info("Files posted (%0.2fs): %s", elapsed, names)
 
             if self.remove_files:
                 try:
                     remove_file(filegroup)
-                except:
-                    self.log.exception("Problem deleting file: %s" % filegroup)
+                except OSError as e:
+                    self.log.exception("Problem deleting file %s: %s", filegroup, e)
 
 
 class FilePost(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
-        self.rate = self.get_rate("rate")
-        self.watches = self.get_components("watches", Watcher)
+        self.rate = self.config.get_rate("pollrate")
+        self.watches = self.config.get_components("watches", factory=Watcher)
 
     def process(self):
+        """Process each file watch group"""
 
         for watch in self.watches.values():
-            watch.check()
+            watch.process()
+
+            if self.is_stopped():
+                break
 
     def main(self):
+        """Main application"""
 
         while self.wait(self.rate):
             self.process()
 
 
 def main():
+    """Script entry point"""
     FilePost(sys.argv).run()

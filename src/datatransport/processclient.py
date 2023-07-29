@@ -473,13 +473,13 @@ class ProcessClient(Root):
         """Run main application, capture any errors to log"""
         try:
             self.init()
-        except:  # pylint: disable=bare-except
+        except Exception:  # pylint: disable=broad-exception-caught
             self.log.exception("Problem detected in init")
             self.abort()
 
         try:
             self.main()
-        except:  # pylint: disable=bare-except
+        except Exception:  # pylint: disable=broad-exception-caught
             self.log.exception("Problem detected in main")
             return  # No clean exit so the watchdog will restart us
 

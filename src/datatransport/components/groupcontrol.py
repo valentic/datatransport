@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""Group Control Component"""
+
 ###########################################################################
 #
 #  GroupControl
@@ -73,9 +76,12 @@
 #
 ###########################################################################
 
-import os
+import nntplib
 import socket
 import sys
+import xmlrpc.client
+
+from pathlib import Path
 
 from datatransport import ProcessClient
 from datatransport import NewsPoller
@@ -84,6 +90,8 @@ from datatransport import newstool
 
 
 class GroupControl(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
@@ -91,94 +99,109 @@ class GroupControl(ProcessClient):
         self.news_poller = NewsPoller(self, callback=self.process)
         self.main = self.news_poller.main
 
-        self.prefix = self.config.get("prefix", "")
-        self.postfix = self.config.get("postfix", "")
+        self.prefix = self.config.get_path("prefix", "")
+        self.postfix = self.config.get_path("postfix", "")
 
-        self.connect()
+        self.wait_for_server()
 
-    def connect(self):
+    def wait_for_server(self):
+        """Connect to transport server"""
 
         self.log.info("Connecting to transport server")
 
-        while True:
-
+        while self.is_running():
             try:
                 self.server.status()
                 return
-            except:
+            except xmlrpc.client.Fault:
                 self.log.error("  - waiting 30 seconds to try again.")
 
             if not self.wait(30):
                 break
 
     def post_message(self, action, group):
+        """Post notification message"""
 
-        curtime = self.current_time()
         hostname = socket.getfqdn()
 
         body = []
         body.append("")
         body.append("  The following action has been performed:")
         body.append("")
-        body.append("      Command  : %s" % action)
-        body.append("      Group    : %s" % group)
-        body.append("      Time     : %s" % curtime)
-        body.append("      Server   : %s" % hostname)
+        body.append(f"      Command  : {action}")
+        body.append(f"      Group    : {group}")
+        body.append(f"      Time     : {self.now()}")
+        body.append(f"      Server   : {hostname}")
         body.append("")
 
-        header = "%s %s" % (action, group)
+        body = "\n".join(body)
+
+        header = f"{action} {group}"
 
         try:
             self.news_poster.set_subject(header)
-            self.news_poster.post_text("\n".join(body))
-        except:
-            self.log.error("Error posting message to mailing list.")
+            self.news_poster.post_text(body)
+        except nntplib.NNTPError as e:
+            self.log.error("Error posting message: %s", e)
 
     def start_group(self, name):
-        self.log.info("Start request for %s" % name)
+        """Start process group"""
+
+        self.log.info("Start request for %s", name)
+
         try:
             self.server.startgroup(name)
-            self.post_message("start", name)
-        except NameError(msg):
-            self.log.info("  The process group does not exist")
+        except xmlrpc.client.Fault as err:
+            self.log.error("Failed to start: %s", err)
+            return
+
+        self.post_message("start", name)
 
     def stop_group(self, name):
-        self.log.info("Stop request for %s" % name)
+        """Stop a process group"""
+
+        self.log.info("Stop request for %s", name)
+
         try:
             self.server.stopgroup(name)
-            self.post_message("stop", name)
-        except NameError(msg):
-            self.log.info("  The process group does not exist")
+        except xmlrpc.client.Fault as err:
+            self.log.info("Failed to stop: %s", err)
+            return
+
+        self.post_message("stop", name)
 
     def process(self, message):
+        """Process message handler"""
 
         filenames = newstool.save_files(message)
 
         for filename in filenames:
-
             if self.is_stopped():
                 return
 
-            for line in open(filename):
+            contents = filename.read_text(encoding="utf-8")
 
+            for line in contents.split("\n"):
                 try:
                     command, name = line.split("=")
-                except:
+                except ValueError:
                     continue
 
                 command = command.strip().lower()
-                name = os.path.join(self.prefix, name.strip())
-                name = os.path.join(name, self.postfix)
+                name = name.strip()
+
+                groupname = str(Path(self.prefix, name, self.postfix))
 
                 if command == "start":
-                    self.start_group(name)
+                    self.start_group(groupname)
                 elif command == "stop":
-                    self.stop_group(name)
+                    self.stop_group(groupname)
                 else:
-                    self.log.error("Unknown request: %s" % command)
+                    self.log.error("Unknown request: %s", command)
 
-            os.remove(filename)
+            filename.unlink()
 
 
 def main():
+    """Script entry point"""
     GroupControl(sys.argv).run()

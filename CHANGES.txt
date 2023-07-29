@@ -1,3 +1,12 @@
+2023-07-27  Todd Valentic
+    - DiskMonitor updated
+    - GroupControl updated
+    - FilePost updated
+    - DiskMonitor updated
+    - FileWatch updated
+
+    - Release 3.0.8
+
 2023-07-20  Todd Valentic
     - ProcessGroup. Do not log error if no clients listed
     - ProcessGroup. Change default shutdown timeout to be 30s

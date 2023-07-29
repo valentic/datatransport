@@ -89,7 +89,7 @@ class Data(AccessMixin):
     def read(self, newsgroup):
         """Read entry from cache"""
      
-     return self.messages[newsgroup]
+        return self.messages[newsgroup]
 
     @synchronized(lock)
     def list(self):
