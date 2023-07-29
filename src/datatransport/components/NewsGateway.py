@@ -88,25 +88,25 @@ class Data(AccessMixin):
     @synchronized(lock)
     def read(self, newsgroup):
         """Read entry from cache"""
-     
+
         return self.messages[newsgroup]
 
     @synchronized(lock)
     def list(self):
         """List cache"""
-      
-      return self.messages.keys()
+
+        return self.messages.keys()
 
     @synchronized(lock)
     def get_string(self, newsgroup):
         """Reture message as string"""
-       
-       return self.messages[newsgroup].as_string()
+
+        return self.messages[newsgroup].as_string()
 
     @synchronized(lock)
     def unpickle(self, newsgroup):
         """Unpickle message"""
-        
+
         return pickle.loads(self.messages[newsgroup].get_payload())
 
 

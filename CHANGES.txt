@@ -1,3 +1,7 @@
+2023-07-29  Todd Valentic
+    - NewsGateway. Fix formatting issue.
+    - Release 3.0.9
+
 2023-07-27  Todd Valentic
     - DiskMonitor updated
     - GroupControl updated
