@@ -105,6 +105,7 @@ def link_programs(package, basepath):
         "console",
         "listnewsgroups",
         "transport-create-app",
+        "transportctl",
         "transportd",
         "transportps",
         "viewlog"
