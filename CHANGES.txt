@@ -1,4 +1,9 @@
 2023-08-11  Todd Valentic
+    - transport-create-app. Make sure to link transportctl to bin
+    - NewsgroupMonitor. Fix import to use apps 
+    - Release 3.0.11 
+
+2023-08-11  Todd Valentic
     - ProcessGroup. Make sure group.home is in PYTHONPATH
     - NewsTool. Set max header line length 77 -> 150
     - transport-create-app. Link programs to bin

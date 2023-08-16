@@ -37,7 +37,7 @@ from datatransport import ProcessClient
 from datatransport import NewsPoster
 from datatransport import NewsPoller
 from datatransport import ConfigComponent
-from datatransport.components import EventMonitor
+from datatransport.apps import EventMonitor
 
 class Feed(EventMonitor.Member):
     """Feed event monitor"""
