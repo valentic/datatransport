@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from datatransport.components import SchedulerEvent 
+from datatransport.apps import SchedulerEvent 
 
 class PanoramaEvent(SchedulerEvent):
 

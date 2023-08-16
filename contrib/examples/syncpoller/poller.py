@@ -4,7 +4,7 @@
 import sys
 
 from datatransport import ProcessClient
-from datatransport.components import SyncPoller 
+from datatransport.apps import SyncPoller 
 
 class Poller(ProcessClient):
     """SyncPoller Process Client"""

@@ -171,7 +171,7 @@ from datatransport import ProcessClient
 from datatransport import NewsPoster
 from datatransport import newstool
 from datatransport import ConfigComponent
-from datatransport.components import PageKit
+from datatransport.apps import PageKit
 
 import sapphire_config as sapphire
 

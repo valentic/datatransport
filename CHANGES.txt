@@ -11,6 +11,8 @@
     - Scheduler. Updated for transport3 / python3
     - SyncPoller. Updated for transport3 / python3
     - WatchURL. Updated for transport3 / python3
+    - Change terminology: components -> apps 
+      These are different from ConfigComponents
 
     - Release 3.0.10 
 
