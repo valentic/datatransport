@@ -12,3 +12,13 @@ filewatch
 archivegroups
 component
 service
+diskmonitor
+filepost
+groupcontrol
+resourcemanager
+newsgateway
+realtimefeed
+postdatafiles
+scheduler
+syncpoller
+watchurl

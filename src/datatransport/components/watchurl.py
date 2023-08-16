@@ -75,17 +75,18 @@
 #
 #####################################################################
 
-import datetime
 import fnmatch
+import hashlib
+import nntplib
 import os
+import pathlib
 import socket
 import subprocess
 import sys
-import time
-import urllib
+import urllib.request
+import urllib.error
 
 from html.parser import HTMLParser
-from hashlib import md5
 from urllib.parse import urlparse, urljoin
 
 from datatransport import ProcessClient
@@ -94,6 +95,8 @@ from datatransport.utilities import remove_file
 
 
 class Parser(HTMLParser):
+    """HTML Parser"""
+
     def __init__(self, include_names, exclude_names):
         HTMLParser.__init__(self)
 
@@ -101,58 +104,68 @@ class Parser(HTMLParser):
         self.exclude_patterns = exclude_names
 
     def get_images(self, url):
+        """Get image URLS on page"""
 
         self.urls = []
         self.base = url
 
-        page = urllib.urlopen(url).read()
+        with urllib.request.urlopen(url) as response:
+            contents = response.read()
+
         self.reset()
-        self.feed(page)
+        self.feed(contents.decode("utf-8"))
         self.close()
 
         return self.urls
 
     def match(self, url):
+        """Check of URL matches pattern"""
 
-        try:
-            path = urlparse(url)[2]
-        except:
-            return 0
+        path = urlparse(url).path
 
         for pattern in self.exclude_patterns:
             if fnmatch.fnmatch(path, pattern):
-                return 0
+                return False
 
         for pattern in self.include_patters:
             if fnmatch.fnmatch(path, pattern):
-                return 1
+                return True
 
-    def handle_image(self, src, alt, ismap, align, width, height):
+        return False
 
-        # This is a fix for one broken site
+    def handle_starttag(self, tag, attrs):
+        if tag == "img":
+            self.handle_image(dict(attrs))
 
-        src = src.replace("\n", "")
-        src = src.replace("\r", "")
+        elif tag == "a":
+            self.handle_anchor(dict(attrs))
+
+    def handle_image(self, attrs):
+        """Handle image tag"""
+
+        src = attrs["src"]
 
         if self.match(src):
             self.urls.append(urljoin(self.base, src))
 
-        if self.anchor and self.match(self.anchor, self.patterns):
-            self.urls.append(urljoin(self.base, self.anchor))
+    def handle_anchor(self, attrs):
+        """Handle anchor tag"""
 
-    def anchor_bgn(self, href, name, type):
+        href = attrs["href"]
 
         if self.match(href):
             self.urls.append(urljoin(self.base, href))
 
 
 class WatchURL(ProcessClient):
+    """Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
         self.news_poster = NewsPoster(self)
 
-        self.pollrate = self.config.get_rate("pollrate", '10m')
+        self.pollrate = self.config.get_rate("pollrate", "10m")
         self.retryrate = self.config.get_rate("retryrate", 60)
         self.timeout = self.config.get_timedelta("timeout", 60)
 
@@ -171,6 +184,9 @@ class WatchURL(ProcessClient):
         self.thumbnail_exts = self.config.get_list("thumbnails.ext", ".jpg .png .gif")
         self.thumbnail_name = self.config.get("thumbnails.name", "%s-thumbnail.jpg")
 
+        self.checksum_files = pathlib.Path("checksum.files")
+        self.checksum_headers = pathlib.Path("checksum.headers")
+
         socket.setdefaulttimeout(self.timeout.total_seconds())
 
         try:
@@ -182,96 +198,99 @@ class WatchURL(ProcessClient):
         if self.url is None:
             self.abort("No URL specified")
 
-        scheme = urlparse(self.url)[0]
+        scheme = urlparse(self.url).scheme
 
         if self.save_images and not scheme.startswith("http"):
             self.abort("Can only save images from http sites")
 
         self.parser = Parser(self.include_names, self.exclude_names)
 
-    def gather_urls(self):
+    def gather_urls(self, src_url):
+        """Find URLs on the page"""
 
         urls = []
 
         if self.save_body:
-            urls.append(self.url)
+            urls.append(src_url)
 
         if self.save_images:
-            urls.extend(self.parser.get_images(self.url))
+            urls.extend(self.parser.get_images(src_url))
 
         self.log.debug("Checking these URLs:")
         for url in urls:
-            self.log.debug("  %s" % url)
+            self.log.debug("  %s", url)
 
         return urls
 
     def get_headers(self, url):
+        """Retrieve headers"""
 
-        self.log.debug("  getting headers from %s" % url)
+        self.log.debug("  getting headers from %s", url)
 
-        headers = urllib.urlopen(url).info().headers
+        with urllib.request.urlopen(url) as response:
+            headers = response.info()
 
         keepers = []
 
-        for header in headers:
-
-            key = header.split(":")[0].strip()
-
-            if key not in self.exclude_headers:
-                self.log.debug("    including %s" % header.strip())
-                keepers.append(header)
+        for header, value in headers.items():
+            if header not in self.exclude_headers:
+                self.log.debug("    including %s", header)
+                keepers.append(f"{header}: {value}")
             else:
-                self.log.debug("    excluding %s" % header.strip())
+                self.log.debug("    excluding %s", header)
 
-        return "".join(keepers)
+        return "\n".join(keepers).encode("utf-8")
 
     def headers_changed(self, urls):
+        """Check if headers have changed"""
 
         self.log.debug("Checking headers")
 
         try:
-            prevChecksum = open("checksum.headers").read()
-        except:
-            prevChecksum = 0
+            prev_checksum = self.checksum_headers.read_text("utf-8")
+        except OSError:
+            prev_checksum = 0
 
-        checksum = md5()
+        checksum = hashlib.md5()
 
         for url in urls:
             checksum.update(self.get_headers(url))
 
         checksum = checksum.hexdigest()
 
-        self.log.debug("  prev checksum: %s" % prevChecksum)
-        self.log.debug("  new  checksum: %s" % checksum)
+        self.log.debug("  prev checksum: %s", prev_checksum)
+        self.log.debug("  new  checksum: %s", checksum)
 
-        if checksum != prevChecksum:
+        if checksum != prev_checksum:
             self.log.debug("  header change detected")
-            open("checksum.headers", "w").write(checksum)
-            return 1
-        else:
-            return 0
+            self.checksum_headers.write_text(checksum, "utf-8")
+            return True
+
+        return False
 
     def files_changed(self, checksum):
+        """Check if files have changed"""
 
         self.log.debug("Checking file checksum")
 
         try:
-            prevChecksum = open("checksum.files").read()
-        except:
-            prevChecksum = 0
+            prev_checksum = self.checksum_files.read_text("utf-8")
+        except OSError:
+            prev_checksum = 0
 
-        self.log.debug("  prev checksum: %s" % prevChecksum)
-        self.log.debug("  new  checksum: %s" % checksum)
+        self.log.debug("  prev checksum: %s", prev_checksum)
+        self.log.debug("  new  checksum: %s", checksum)
 
-        if checksum != prevChecksum:
+        if checksum != prev_checksum:
             self.log.debug("  new files detected")
-            open("checksum.files", "w").write(checksum)
-            return 1
-        else:
-            self.log.debug("  files are the same")
-            return 0
+            self.checksum_files.write_text(checksum, "utf-8")
+            return True
+
+        self.log.debug("  files are the same")
+        return False
 
     def remap(self, filename):
+        """Rename file"""
 
         for pattern, result in self.rename_rules:
             if fnmatch.fnmatch(filename, pattern):
@@ -280,36 +299,38 @@ class WatchURL(ProcessClient):
         return filename
 
     def retrieve_files(self, urls):
+        """Retrieve files"""
 
         filenames = []
         unknownext = 0
-        checksum = md5()
+        checksum = hashlib.md5()
 
         self.log.debug("Retrieving files:")
 
         for url in urls:
-
-            path = urlparse.urlparse(url)[2]
+            path = urlparse(url).path
             filename = os.path.basename(path)
             if not filename:
-                filename = "unknown.%d" % unknownext
+                filename = f"unknown.{unknownext}"
                 unknownext = unknownext + 1
 
             filename = self.remap(filename)
 
             try:
-                contents = urllib.urlopen(url).read()
+                with urllib.request.urlopen(url) as response:
+                    contents = response.read()
                 checksum.update(contents)
-                open(filename, "w").write(contents)
+                with open(filename, "wb") as f:
+                    f.write(contents)
                 filenames.append(filename)
-                self.log.debug("  %s -> %s" % (url, filename))
-            except:
-                self.log.error("Problem retrieving %s" % url)
-                self.log.exception("Traceback:")
+                self.log.debug("  %s -> %s", url, filename)
+            except Exception as err: # pylint: disable: broad-exception-caught
+                self.log.error("Problem retrieving %s: %s", url, err)
 
         return filenames, checksum.hexdigest()
 
     def make_thumbnails(self, filenames):
+        """Create thumbnails"""
 
         self.log.debug("Making thumbnails")
 
@@ -318,27 +339,25 @@ class WatchURL(ProcessClient):
         for filename in filenames:
             root, ext = os.path.splitext(filename)
             if ext in self.thumbnail_exts:
-                self.log.debug("  creating thumbnail for %s" % filename)
+                self.log.debug("  creating thumbnail for %s", filename)
                 outputname = self.thumbnail_name % root
-                cmd = "%s %s %s" % (self.thumbnail_cmd, filename, outputname)
+                cmd = f"{self.thumbnail_cmd} {filename} {outputname}"
                 status, output = subprocess.getstatusoutput(cmd)
 
                 if status == 0:
                     thumbnails.append(outputname)
                 else:
-                    self.log.error("Problem running thumbnail command: %s" % cmd)
-                    self.log.error("Output: %s" % output)
+                    self.log.error("Problem running thumbnail command: %s", cmd)
+                    self.log.error("Output: %s", output)
 
         return thumbnails
 
     def main(self):
-
         self.wait(self.pollrate)
 
         while self.is_running():
-
             try:
-                urls = self.gather_urls()
+                urls = self.gather_urls(self.url)
             except:
                 self.log.exception("Problem gathering URLs")
                 self.wait(self.retryrate)
@@ -372,12 +391,8 @@ class WatchURL(ProcessClient):
                     try:
                         self.news_poster.post(filenames)
                         self.log.info("New files detected, posting %s", filenames)
-                    except:
-                        self.log.exception("Error posting to the news server")
-                else:
-                    self.log.info(
-                        "Strange, filenames detected, but none listed for posting..."
-                    )
+                    except nntplib.NNTPError as err:
+                        self.log.error("Error posting to the news server: %s", err)
 
             remove_file(filenames)
 
@@ -385,4 +400,5 @@ class WatchURL(ProcessClient):
 
 
 def main():
+    """Script entry point"""
     WatchURL(sys.argv).run()

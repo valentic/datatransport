@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+"""Synchronized newsgroup poller"""
 
 ###########################################################################
 #
@@ -31,7 +32,7 @@
 #               Added valid_message default method.
 #
 #   2009-05-04  Todd Valentic
-#               Added catchup and reset to _runPollers() interface.
+#               Added catchup and reset to _run_pollers() interface.
 #                   These have been missing for awhile (NewsPollMixin
 #                   changed the signature). The values are not used here.
 #
@@ -39,57 +40,56 @@
 #               Reorder imports
 #               NewsPoller
 #
+#   2023-07-15  Todd Valentic
+#               Updated for transport3 / python3
+#               Converted to just be a specalized NewsPoller
+#
 ###########################################################################
 
-from datatransport import ProcessClient
 from datatransport import NewsPoller
 from datatransport import newstool
 
 
-class SyncPoller(ProcessClient):
-    def __init__(self, argv, prefix="poll", callback=None, idle=None):
-        ProcessClient.__init__(self, argv)
+class SyncPoller(NewsPoller):
+    """Synchronized NewsPoller"""
 
-        self.news_poller = NewsPoller(self, prefix=pefix, callback=callback, idle=idle)
-        self.news_pollers = self.news_poller.news_pollers
+    def __init__(self, *p, **kw):
+        NewsPoller.__init__(self, *p, **kw)
 
         self.messages = {}
-        self.callback = callback
 
-        for poller in self.ews_pollers:
+        for poller in self.news_pollers:
             self.messages[poller] = None
 
     def get_timestamp(self, message):
+        """Get message timestamp"""
+
         return newstool.message_date(message)
 
-    def valid_message(self, message):
-        # Derived class can override
+    def valid_message(self, _message):
+        """Check if message is valid"""
+
         return True
 
-    def compare_messages(self):
+    def find_oldest_message(self):
+        """Search for oldest message"""
 
-        # Search for oldest message
+        oldest_time = None
+        oldest_poller = None
 
-        oldestTime = None
-        oldestPoller = None
+        for poller, message in self.messages.items():
+            if not message:
+                continue
+            timestamp = self.get_timestamp(message)
+            if oldest_time is None or timestamp < oldest_time:
+                oldest_time = timestamp
+                oldest_poller = poller
 
-        for poller in self.news_pollers:
-            message = self.messages[poller]
-            if message:
-                timestamp = self.get_timestamp(message)
-                if oldestTime is None or timestamp < oldestTime:
-                    oldestTime = timestamp
-                    oldestPoller = poller
-
-        return oldestPoller
-
-    def validate_message(self, message):
-        return True
+        return oldest_poller
 
     def get_next_message(self, poller):
-
-        # Get the next *valid* message from the news group.
-        # Return None if no messages are available.
+        """Get the next *valid* message from the news group.
+        Return None if no messages are available."""
 
         while self.is_running():
             message = poller.get_next_message()
@@ -107,22 +107,25 @@ class SyncPoller(ProcessClient):
 
         return message
 
-    def _runPollers(self, catchup, reset):
+    def refresh_messages(self):
+        """Refresh message queue"""
+
+        for poller in self.news_pollers:
+            if self.messages[poller] is None:
+                self.messages[poller] = self.get_next_message(poller)
+
+    def run_pollers(self, catchup, reset):
+        """Run each poller, synchronized"""
 
         while self.is_running():
-
-            # Refresh the queued message list.
-
-            for poller in self.news_pollers:
-                if self.messages[poller] is None:
-                    self.messages[poller] = self.get_next_message(poller)
+            self.refresh_messages()
 
             if not self.is_running():
                 break
 
             # Find the preferred message to process
 
-            poller = self.compare_messages()
+            poller = self.find_oldest_message()
 
             if not self.is_running():
                 break

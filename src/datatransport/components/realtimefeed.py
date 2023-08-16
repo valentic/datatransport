@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""RealTimeFeed Component"""
+
 ###########################################################################
 #
 #   RealTimeFeed
@@ -61,7 +64,7 @@
 ###########################################################################
 
 import copy
-import os
+import nntplib
 import sys
 
 from datatransport import ProcessClient
@@ -71,6 +74,8 @@ from datatransport import NewsPoller
 
 
 class RealTimeFeed(ProcessClient):
+    """RealTimeFeed Process Client"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
@@ -78,12 +83,15 @@ class RealTimeFeed(ProcessClient):
         self.news_poller = NewsPoller(self, callback=self.process)
         self.main = self.news_poller.main
 
-    def fix_headers(self, message):
+    def filter_headers(self, message):
+        """Filter out headers"""
 
-        ignoreHeaders = [
+        ignore_headers = [
             "Newsgroups",
             "Path",
             "Date",
+            "Injection-Date",
+            "Injection-Info",
             "Message-ID",
             "NNTP-Posting-Host",
             "NNTP-Posting-Date",
@@ -92,36 +100,37 @@ class RealTimeFeed(ProcessClient):
             "Xref",
         ]
 
-        for name in ignoreHeaders:
-            try:
-                del message[name]
-            except:
-                pass
+        for header in ignore_headers:
+            if header in message:
+                del message[header]
 
         message["Newsgroups"] = self.news_poster.newsgroup_header
 
         return message
 
-    def valid_message(self, message):
+    def valid_message(self, _message):
+        """Validate message"""
         return True
 
-    def process(self, originalMessage):
+    def process(self, src_message):
+        """Process new message"""
 
-        message = copy.deepcopy(originalMessage)
+        message = copy.deepcopy(src_message)
 
         if not self.valid_message(message):
             self.log.debug("Skipping message (not valid)")
             return
 
-        message = self.fix_headers(message)
+        message = self.filter_headers(message)
 
         try:
             response = self.news_poster.post_raw(message)
-            self.log.info("Files posted, response=%s" % response)
-        except:
-            self.log.exception("Problem posting to the news server")
+        except nntplib.NNTPError as err:
+            self.log.error("Problem posting to the news server: %s", err)
             raise newstool.ProcessRetry
 
+        self.log.info("Files posted, response=%s", response)
 
 def main():
+    """Script entry point"""
     RealTimeFeed(sys.argv).run()

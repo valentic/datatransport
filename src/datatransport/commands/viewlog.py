@@ -45,6 +45,9 @@
 #               Handle mulitple groups/clients
 #               Make sure output is always time ordered
 #
+#   2023-08-11  Todd Valentic
+#               Show more lines at start to better catch trace backs 
+#
 ##########################################################################
 
 import argparse
@@ -97,7 +100,7 @@ class FileTracker:
             self.file = stream
 
             if self.firsttime:
-                offset = 500
+                offset = 1000
                 self.size = max(stats.st_size - offset, 0)
             else:
                 self.size = 0

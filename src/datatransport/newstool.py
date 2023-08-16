@@ -346,6 +346,12 @@
 #   2023-07-26  Todd Valentic
 #               Support pathlib in poster
 #
+#   2023-08-07  Todd Valentic
+#               Set policy for longer line length (150 chars). We were
+#                   failing to create new groups with Control messages
+#                   when the Control header exceeded the default 77 
+#                   characters. The Python splitting altogrithm worked,
+#                   but innd does not appear to support multiline headers.
 #
 ###########################################################################
 
@@ -745,7 +751,8 @@ class NewsPoster(NewsTool):
         """Post message to newsgroup if enabled"""
 
         if self.enabled:
-            return self.open_server().post(msg.as_bytes())
+            policy = msg.policy.clone(max_line_length=150)
+            return self.open_server().post(msg.as_bytes(policy=policy))
 
         return None
 

@@ -136,19 +136,21 @@
 #                   NewsPoster
 #
 #   2023-07-26  Todd Valentic
-#               Updated for transport3 / python3 
+#               Updated for transport3 / python3
 #
 ############################################################################
 
 import bz2
-import glob
+import hashlib
 import math
+import nntplib
 import os
+import shutil
 import subprocess
 import sys
 import time
 
-from datetime import datetime
+from pathlib import Path
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -163,185 +165,196 @@ class PostDataFiles(ProcessClient):
 
         self.news_poster = NewsPoster(self)
 
-        self.input_name = self.get("input.name", "*.DAT")
-        self.input_path = self.get("input.path", ".")
-        self.include_current = self.get_boolean("include_current", False)
-        self.compress = self.get_boolean("compress", True)
-        self.remove_files = self.get_boolean("remove_files", False)
-        self.max_files = self.get_int("max_files")
-        self.max_size = self.get_bytes("max_size", "20Mb")
-        self.check_index = self.get_boolean("check_index", True)
-        self.check_size = self.get_boolean("check_size", True)
+        self.exit_on_failure = self.config.get_boolean("exit_on_error", False)
 
-        self.pollrate = self.get_rate("pollrate", "5")
-        self.filedate = self.get_callback("filedate", self.filedate_callback)
+        self.input_name = self.config.get("input.name", "*.DAT")
+        self.input_path = self.config.get("input.path", ".")
+        self.include_current = self.config.get_boolean("include_current", False)
+        self.compress = self.config.get_boolean("compress", True)
+        self.remove_files = self.config.get_boolean("remove_files", False)
+        self.max_files = self.config.get_int("max_files")
+        self.max_size = self.config.get_bytes("max_size", "20Mb")
+        self.check_index = self.config.get_boolean("check_index", True)
+        self.check_size = self.config.get_boolean("check_size", True)
 
-        self.timefile = "timestamp"
-        self.indexfile = "index"
+        self.pollrate = self.config.get_rate("pollrate", 60)
+        self.filedate = self.config.get_callback("filedate", self.filedate_callback)
 
-        if not os.path.isfile(self.timefile):
+        self.timefile = Path("timestamp")
+        self.indexfile = Path("index")
+
+        if not self.timefile.exists():
             # Default to sometime long ago
-            open(self.timefile, "w").write("0")
-            t = time.mktime((1975, 1, 1, 0, 0, 0, 0, 0, 0))
-            os.utime(self.timefile, (t, t))
+            self.timefile.write_text("0", "utf-8")
+            timestamp = time.mktime((1975, 1, 1, 0, 0, 0, 0, 0, 0))
+            os.utime(self.timefile, (timestamp, timestamp))
 
-        if self.get_boolean("startCurrent", False) == 1:
+        if self.config.get_boolean("start_current", False):
             os.utime(self.timefile, None)
 
-        if not os.path.isfile(self.indexfile):
-            open(self.indexfile, "w").write("0")
+        self.log.info("Input path: %s", self.input_path)
+        self.log.info("Input name: %s", self.input_name)
 
-        self.log.info("Input path: %s" % self.input_path)
-        self.log.info("Input name: %s" % self.input_name)
+    def filedate_callback(self, _filename):
+        """Extract timestamp from file"""
 
-    def filedate_callback(self, file):
         return None
 
     def split(self, filename):
+        """Split file into chunks"""
 
-        filesize = os.path.getsize(filename)
+        filesize = filename.stat().st_size
 
         if not self.check_size or filesize <= self.max_size:
             return [filename]
 
-        numchunks = int(math.ceil(filesize / float(self.max_size)))
+        num_chunks = math.ceil(filesize / self.max_size)
         chunks = []
-        file = open(filename, "rb")
 
-        for chunk in range(numchunks):
-            data = file.read(self.max_size)
-            chunkname = f"chunk.{chunk:03d}"
-            open(chunkname, "wb").write(data)
-            chunks.append(chunkname)
+        with filename.open("rb") as f:
+            for chunk in range(num_chunks):
+                data = f.read(self.max_size)
+                chunkname = Path(f"chunk.{chunk:03d}")
+                chunkname.write_bytes(data)
+                chunks.append(chunkname)
 
-        self.log.info("  - split into %d parts" % numchunks)
+            self.log.info("  - split into %d parts", num_chunks)
 
         return chunks
 
-    def get_checksum(self, filename):
-        # Shell out - some files might be quite large
-        status, output = subprocess.getstatusoutput("md5sum %s" % filename)
+    def compute_checksum(self, filename):
+        """Compute checksum"""
 
-        if status != 0:
-            return None
+        with filename.open("rb") as f:
+            digest = hashlib.file_digest(f, "md5")
 
-        return output.split()[0]
+        return digest.hexdigest()
 
     def post(self, filename, timestamp):
+        """Post file to newsgroup"""
 
-        files = self.split(filename)
-        part = 1
-        numparts = len(files)
-        basename = os.path.basename(filename)
-        checksum = self.get_checksum(filename)
+        filenames = self.split(filename)
+        numparts = len(filenames)
+        checksum = self.compute_checksum(filename)
 
-        for file in files:
-
+        for part, filepart in enumerate(filenames):
             headers = {}
             if numparts > 1:
-                headers["X-Transport-Part"] = "%d/%d" % (part, numparts)
-                headers["X-Transport-Filename"] = basename
-                part += 1
+                headers["X-Transport-Part"] = f"{part}/{numparts}"
+                headers["X-Transport-Filename"] = filename.stem
 
-            if checksum:
-                # Note - checksum of the *entire* file, not part
-                headers["X-Transport-md5"] = checksum
+            # Note - checksum of the *entire* file, not part
+            headers["X-Transport-md5"] = checksum
 
-            filesize = os.path.getsize(file)
-            self.log.debug("  - posting %s (%s)" % (file, size_desc(filesize)))
-            self.news_poster.post([file], date=timestamp, headers=headers)
+            filesize = filepart.stat().st_size
+            self.log.debug("  - posting %s (%s)", filepart, size_desc(filesize))
+            self.news_poster.post([filepart], date=timestamp, headers=headers)
 
             if numparts > 1:
-                os.remove(file)
+                os.remove(filepart)
 
-    def process(self, file):
+    def valid_index(self, filename):
+        """Check file is larger than last index"""
+
+        if not self.check_index:
+            return True
+
+        if not self.indexfile.exists():
+            return True
+
+        last_filename = self.indexfile.read_text("utf-8")
+
+        if filename.stem > last_filename:
+            return True
+
+        self.log.info("  - %s already processed (%s)", filename.stem, last_filename)
+
+        return False
+
+    def process_file(self, filename):
+        """Process file (compress, split, post)"""
+
+        self.log.info("Processing %s", filename)
+
+        # Check if we have seen this file before
+
+        if not self.valid_index(filename):
+            return
+
+        # Get timestamp from file
+
+        try:
+            timestamp = self.filedate(filename)
+            if timestamp:
+                self.log.debug("  - file timestamp %s", timestamp)
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.log.exception("Error calling routine to determine file timestamp")
+            return
 
         # Compress the file
 
-        self.log.info("Processing %s" % file)
-
         bzipext = ".bz2"
-        basename = os.path.basename(file)
-        baseext = os.path.splitext(basename)[1]
-        isCompressed = baseext == bzipext
-        zipname = basename + bzipext
-        lastindex = open(self.indexfile).readline()
+        zipname = filename.with_suffix(filename.suffix + bzipext)
 
-        if self.check_index:
-            try:
-                curindex = os.path.splitext(basename)[0]
-            except:
-                self.log.error("Cannot determine index of %s" % basename)
-                return
-
-            if curindex <= lastindex:
-                self.log.info(
-                    "  - the file %s has been processed before (index=%s)"
-                    % (basename, lastindex)
-                )
-                return
-
-        try:
-            date = self.filedate(file)
-            if date:
-                self.log.debug("  - file date: %s" % date)
-        except:
-            self.log.exception("Error calling routine to determine file date")
-            return
-
-        if self.compress and not isCompressed:
-
+        if self.compress and filename.suffix != bzipext:
             starttime = self.now()
 
             self.log.debug("  - compressing file")
-            data = open(file).read()
-            open(zipname, "w").write(bz2.compress(data))
+            with filename.open("rb") as infile:
+                with bz2.BZ2File(zipname, "wb", compresslevel=9) as outfile:
+                    shutil.copyfileobj(infile, outfile)
 
-            orgsize = os.path.getsize(file)
-            zipsize = os.path.getsize(zipname)
+            orgsize = filename.stat().st_size
+            zipsize = zipname.stat().st_size
 
             if orgsize > 0:
-                zippct = (zipsize / float(orgsize)) * 100
+                zippct = (zipsize / orgsize) * 100
             else:
                 zippct = 0
 
             totaltime = self.now() - starttime
             self.log.info(
-                "  - %s -> %s (%d%%) %s"
-                % (size_desc(orgsize), size_desc(zipsize), zippct, totaltime)
+                "  - %s -> %s (%d%%) %s",
+                size_desc(orgsize),
+                size_desc(zipsize),
+                zippct,
+                totaltime,
             )
 
             postfile = zipname
 
         else:
-
-            postfile = file
+            postfile = filename
 
         # Post file to news server
 
         try:
-            self.post(postfile, date)
-        except:
-            self.log.exception("Problem post file")
+            self.post(postfile, timestamp)
+        except nntplib.NNTPError as err:
+            self.log.error("Problem posting file: %s", err)
             return
 
         # Cleanup files
 
-        remove_file(zipname)
+        if zipname.exists():
+            zipname.unlink()
 
         if self.remove_files:
             try:
-                remove_file(file)
-                self.log.debug("  - removed original file: %s" % file)
-            except:
-                self.log.exception("Problem removing file: %s" % file)
+                filename.unlink()
+                self.log.debug("  - removed original file: %s", filename)
+            except OSError as err:
+                self.log.error("Problem removing file %s: %s", filename, err)
 
         # Update the index file
 
         if self.check_index:
-            file = open(self.indexfile, "w").write(str(curindex))
+            self.indexfile.write_text(filename.stem, "utf-8")
 
     def poll(self):
+        """Poll for new files"""
+
+        # pylint: disable=consider-using-f-string
 
         cmd = 'find %s -newer %s -type f -name "%s" -print' % (
             self.input_path,
@@ -349,45 +362,55 @@ class PostDataFiles(ProcessClient):
             self.input_name,
         )
 
-        (status, filelist) = subprocess.getstatusoutput(cmd)  # run command, get output
+        status, output = subprocess.getstatusoutput(cmd)
 
         if status != 0:
+            self.log.debug("Problem running find")
+            self.log.debug("cmd: %s", cmd)
+            self.log.debug("status: %s", status)
+            self.log.debug("output: %s", output)
             return []
 
-        filelist = filelist.split()  # make list, break at \n
-        filelist.sort()
+        filelist = sorted(output.split("\n"))
 
         if not self.include_current:
-            filelist = filelist[0:-1]  # don't include the current file
+            # exclude the current file
+            filelist = filelist[:-1]
 
-        if self.max_files:  # keep only the last N files
+        if self.max_files:
+            # only keep the last N files
             filelist = filelist[-self.max_files :]
 
-        return filelist
+        return [Path(filename) for filename in filelist]
 
-    def do_run(self):
+    def process(self):
+        """Post any new files"""
 
-        try:
-            files = self.poll()
-            self.log.debug("Polling - found %d new files." % len(files))
+        filenames = self.poll()
 
-            for file in files:
-                timestamp = os.path.getmtime(file)
-                self.process(file)
-                os.utime(self.timefile, (timestamp, timestamp))
-                if self.is_stopped():
-                    return
+        self.log.debug("Polling - found %d new files.", len(filenames))
 
-        except:
-            self.log.exception("Failure in run")
+        for filename in filenames:
+            timestamp = filename.stat().st_mtime
+            self.process_file(filename)
+            os.utime(self.timefile, (timestamp, timestamp))
+
+            if self.is_stopped():
+                return
 
     def main(self):
+        """Main application"""
 
         while self.wait(self.pollrate):
-            self.do_run()
-
-        self.log.error("Exiting")
+            try:
+                self.process()
+            except Exception as err:  # pylint: disable=broad-exception-caught
+                if self.exit_on_error:
+                    self.log.exception("Problem processing")
+                    return
+                self.log.error("Problem processing: %s", err)
 
 
 def main():
+    """Script entry point"""
     PostDataFiles(sys.argv).run()

@@ -6,9 +6,11 @@ from .filepost          import FilePost
 from .groupcontrol      import GroupControl
 from .InstrumentStatus	import InstrumentStatus
 from .NewsgroupMonitor  import NewsgroupMonitor
+from .newsgateway       import NewsGateway 
 from .PlotTool          import PlotTool
-from .PostDataFiles     import PostDataFiles
-from .RealTimeFeed      import RealTimeFeed
-from .ResourceMonitor	import ResourceMonitor
-from .SyncPoller        import SyncPoller
-from .WatchURL	        import WatchURL
+from .postdatafiles     import PostDataFiles
+from .realtimefeed      import RealTimeFeed
+from .resourcemonitor	import ResourceMonitor
+from .scheduler         import Scheduler, SchedulerEvent
+from .syncpoller        import SyncPoller
+from .watchurl	        import WatchURL

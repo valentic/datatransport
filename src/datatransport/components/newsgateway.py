@@ -32,11 +32,9 @@ import shelve
 import sys
 
 from threading import Thread, Lock
-from datetime import datetime
-from datetime import timedelta
 
 from datatransport import ProcessClient
-from datatransport import XMLRPCServerMixin
+from datatransport import XMLRPCServer
 from datatransport import NewsPoller
 from datatransport import AccessMixin
 
@@ -74,7 +72,7 @@ class Data(AccessMixin):
         self.messages[newsgroup] = self.write_handler(newsgroup, message)
         self.messages.sync()
 
-    def write_handler(self, newsgroup, message):
+    def write_handler(self, _newsgroup, message):
         """What to cache"""
         return message
 
@@ -95,11 +93,11 @@ class Data(AccessMixin):
     def list(self):
         """List cache"""
 
-        return self.messages.keys()
+        return list(self.messages.keys())
 
     @synchronized(lock)
     def get_string(self, newsgroup):
-        """Reture message as string"""
+        """Return message as string"""
 
         return self.messages[newsgroup].as_string()
 
@@ -107,7 +105,8 @@ class Data(AccessMixin):
     def unpickle(self, newsgroup):
         """Unpickle message"""
 
-        return pickle.loads(self.messages[newsgroup].get_payload())
+        payload = self.messages[newsgroup].get_payload().encode("utf-8")
+        return pickle.loads(payload)
 
 
 class Server(Thread, AccessMixin):
@@ -117,10 +116,10 @@ class Server(Thread, AccessMixin):
         Thread.__init__(self)
         AccessMixin.__init__(self, parent)
 
-        self.xmlserver = XMLRPCServerMixin(self)
-        self.main = self.xmlserver.main
+        self.xmlserver = XMLRPCServer(self)
+        self.run = self.xmlserver.main
 
-        self.setDaemon(True)
+        self.daemon = True
 
         self.data = data
 
@@ -131,6 +130,8 @@ class Server(Thread, AccessMixin):
 
         self.add_handlers()
 
+        self.log.info("*** init done")
+
     def add_handlers(self):
         """Used by derived classes to add handlers"""
         return
@@ -139,9 +140,7 @@ class Server(Thread, AccessMixin):
         """Read message from newsgroup"""
 
         message = self.data.read(newsgroup)
-        headers = {}
-        for key, value in message.items():
-            headers[key] = value
+        headers = dict(message.items())
         return {"headers": headers, "body": message.get_payload()}
 
 
@@ -160,7 +159,7 @@ class NewsGateway(ProcessClient):
 
         if self.timeout:
             self.log.info("Timeout set to %s", self.timeout)
-            self.next_time = self.now() + self.timeout
+            self.deadline = self.now() + self.timeout
         else:
             self.log.info("No timeout set")
 
@@ -173,7 +172,7 @@ class NewsGateway(ProcessClient):
         self.data.write(message)
 
         if self.timeout:
-            self.next_time = self.now() + self.timeout
+            self.deadline = self.now() + self.timeout
             self.in_timeout = False
 
     def idle(self):
@@ -182,11 +181,12 @@ class NewsGateway(ProcessClient):
         if self.in_timeout:
             return
 
-        if self.timeout and self.now() > self.next_time:
+        if self.timeout and self.now() > self.deadline:
             self.log.info("timeout reached, clearing values")
             self.data.clear()
             self.in_timeout = True
 
 
 def main():
+    """Script entry point"""
     NewsGateway(Data, Server, sys.argv).run()

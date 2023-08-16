@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""Resource monitor"""
+
+# pylint: disable=broad-exception-caught
+
 ##########################################################################
 #
 #   Resource Monitor
@@ -45,40 +50,51 @@
 #               Use get_rate()
 #               Use NewsPoster
 #
+#   2023-08-11  Todd Valentic
+#               Updated for transport3 / python3
+#
 ##########################################################################
 
-import configparser
 import io
 import os
 import sys
 
+from pathlib import Path
+
 from datatransport import ProcessClient
 from datatransport import NewsPoster
+import sapphire_config as sapphire
 
 
 class ResourceMonitor(ProcessClient):
+    """Resource Monitor"""
+
     def __init__(self, argv):
         ProcessClient.__init__(self, argv)
 
         self.news_poster = NewsPoster(self)
-        self.rate = self.get_rate("rate", 600)
+        self.rate = self.config.get_rate("rate", 600)
 
         self.lasttx = {}
         self.lastrx = {}
 
-    def update_mounts(self, stats):
+    def read_proc(self, path):
+        """Read data from /proc path"""
 
-        mounts = open("/proc/mounts").read().split("\n")
-        mounts = filter(lambda x: len(x), mounts)
-        mounts = map(lambda x: x.split()[0:4], mounts)
+        return Path("/proc", path).read_text('utf-8').split("\n")
+
+    def update_mounts(self, stats):
+        """Update status of file mounts"""
+
+        mounts = self.read_proc("mounts")
+        mounts = [mount.split()[0:4] for mount in mounts if mount]
 
         paths = []
 
         for device, path, fstype, access in mounts:
-
             try:
                 info = os.statvfs(path)
-            except:
+            except OSError:
                 continue
 
             if device == "none":
@@ -111,8 +127,9 @@ class ResourceMonitor(ProcessClient):
         stats.set("System", "mounts", " ".join(paths))
 
     def update_memory(self, stats):
+        """Update memory usage stats"""
 
-        lines = open("/proc/meminfo").read().split("\n")
+        lines = self.read_proc("meminfo")
 
         if "total:" in lines[0]:  # old style format
             lines = lines[3:]
@@ -125,12 +142,13 @@ class ResourceMonitor(ProcessClient):
                 key, value = line.split(":")
                 value = int(value.split()[0]) * 1024
                 stats.set(section, key, str(value))
-            except:
+            except Exception:
                 pass
 
     def update_load(self, stats):
+        """Update load stats"""
 
-        info = open("/proc/loadavg").read().split("\n")
+        info = self.read_proc("loadavg")
         load = info[0].split()
 
         section = "Load"
@@ -141,21 +159,24 @@ class ResourceMonitor(ProcessClient):
         stats.set(section, "15min", load[2])
 
     def update_swaps(self, stats):
+        """Update swap usage"""
 
         section = "Swaps"
         stats.add_section(section)
 
-        info = open("/proc/swaps").read().split("\n")
+        info = self.read_proc("swaps")
 
         swaps = []
 
         for line in info[1:-1]:
+            if not line:
+                continue
             try:
-                dev, type, size, used, priority = line.split()
-            except:
+                dev, fstype, size, used, priority = line.split()
+            except ValueError:
                 continue
             swaps.append(dev)
-            stats.set(section, dev + ".type", type)
+            stats.set(section, dev + ".type", fstype)
             stats.set(section, dev + ".size", str(int(size) * 1024))
             stats.set(section, dev + ".used", str(int(used) * 1024))
             stats.set(section, dev + ".priority", priority)
@@ -163,8 +184,9 @@ class ResourceMonitor(ProcessClient):
         stats.set(section, "mounts", " ".join(swaps))
 
     def update_uptime(self, stats):
+        """Update uptime stats"""
 
-        info = open("/proc/uptime").read().split("\n")
+        info = self.read_proc("uptime")
         secs = float(info[0].split()[0])
 
         section = "Uptime"
@@ -172,6 +194,8 @@ class ResourceMonitor(ProcessClient):
         stats.set(section, "seconds", str(secs))
 
     def compute_rate(self, prevbytes, prevtime, curbytes, curtime):
+        """Update network data rates"""
+
         if prevbytes > curbytes:
             # Counter rollover
             deltabytes = 2**32 - prevbytes + curbytes
@@ -180,17 +204,17 @@ class ResourceMonitor(ProcessClient):
         return deltabytes / (curtime - prevtime).seconds
 
     def update_network(self, stats):
+        """Update networks"""
 
-        info = open("/proc/net/dev").read().split("\n")[2:-1]
+        info = self.read_proc("net/dev")[2:-1]
 
         section = "Network"
         stats.add_section(section)
 
         devs = []
-        now = self.current_time()
+        now = self.now()
 
         for device in info:
-
             name, data = device.split(":")
             name = name.strip()
             data = data.split()
@@ -223,11 +247,12 @@ class ResourceMonitor(ProcessClient):
 
         stats.set(section, "devices", " ".join(devs))
 
-    def check(self):
+    def process(self):
+        """Gather new status snapshot"""
 
-        timestamp = self.current_time()
+        timestamp = self.now()
 
-        stats = configparser.SafeConfigParser()
+        stats = sapphire.Parser()
         stats.add_section("System")
         stats.set("System", "timestamp", str(timestamp))
 
@@ -246,13 +271,13 @@ class ResourceMonitor(ProcessClient):
         self.log.info("Posting snapshot")
 
     def main(self):
-
         while self.wait(self.rate):
             try:
-                self.check()
-            except:
+                self.process()
+            except Exception:  # pylint: disable=broad-exception-caught
                 self.log.exception("Error updating snapshot")
 
 
 def main():
+    """Script entry point"""
     ResourceMonitor(sys.argv).run()

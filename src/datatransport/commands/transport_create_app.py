@@ -72,7 +72,7 @@ def create_dirs(basepath):
 
     basepath.mkdir(exist_ok=True, parents=True)
 
-    dirs = ['etc', 'var', 'tmp', 'log', 'groups']
+    dirs = ['bin', 'etc', 'var', 'tmp', 'log', 'groups']
 
     for leaf in dirs:
         basepath.joinpath(leaf).mkdir(exist_ok=True)
@@ -94,6 +94,26 @@ def install_config(args, basepath):
         
         with outputPath.open(mode='w') as output:
             output.write(contents)
+
+def link_programs(package, basepath):
+
+    venv_path = Path(os.environ["VIRTUAL_ENV"],"bin")
+    dest_path = basepath.joinpath('bin')
+
+    programs = [
+        "cancelnewsgroup",
+        "console",
+        "listnewsgroups",
+        "transport-create-app",
+        "transportd",
+        "transportps",
+        "viewlog"
+    ]
+
+    for program in programs:
+        src = venv_path.joinpath(program)
+        dst = dest_path.joinpath(program)
+        dst.symlink_to(src)
 
 def install_groups(package, basepath):
 
@@ -121,6 +141,7 @@ def main():
 
     create_dirs(basepath)
     install_config(args, basepath)
+    link_programs(args, basepath)
     install_groups('datatransport.templates.groups', basepath / 'groups')
 
     print(f'Created in {basepath}')

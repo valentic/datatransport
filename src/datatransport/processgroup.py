@@ -53,6 +53,9 @@
 #               Reduce default shutdown_timeout to 30s
 #               Change shutdown_timeout to timedelta 
 #
+#   2023-08-14  Todd Valentic
+#               Make sure group.home in PYTHONPATH
+#
 #############################################################################
 
 import configparser
@@ -200,6 +203,17 @@ class ProcessGroup:
             else:
                 self.environ[var] = value
             self.log.debug("  add: %s=%s", var, self.environ[var])
+
+        if 'PYTHONPATH' in os.environ:
+            pythonpath = os.environ['PYTHONPATH'].split(':')
+        else:
+            pythonpath = []
+
+        grouphome = self.config.get("ProcessGroup", "group.home")
+
+        if grouphome not in pythonpath:
+            pythonpath.append(grouphome)
+            os.environ['PYTHONPATH'] = ':'.join(pythonpath)
 
         for key, value in self.environ.items():
             self.log.debug("  %s = %s", key, value)
