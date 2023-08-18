@@ -46,7 +46,7 @@
 #               Make sure output is always time ordered
 #
 #   2023-08-11  Todd Valentic
-#               Show more lines at start to better catch trace backs 
+#               Show more lines at start to better catch trace backs
 #
 ##########################################################################
 
