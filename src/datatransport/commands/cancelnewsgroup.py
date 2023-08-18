@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+"""Cancel messages in a new group"""
+
 ##########################################################################
 #
 #   Cancel messages in a news group
@@ -10,21 +13,30 @@
 
 import argparse
 
-from datatransport import newstool 
+from datatransport import newstool
+
 
 def main():
-    
+    """Script entry point"""
+
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('newsgroup')
+    parser.add_argument("newsgroup")
 
-    parser.add_argument('-s','--server',
-                default='localhost',
-                help='News server host (default %(default)s)')
+    parser.add_argument(
+        "-s",
+        "--server",
+        default="localhost",
+        help="News server host (default %(default)s)",
+    )
 
-    parser.add_argument('-p','--port',
-                default=119, type=int,
-                help='News server port (default %(default)s)') 
+    parser.add_argument(
+        "-p",
+        "--port",
+        default=119,
+        type=int,
+        help="News server port (default %(default)s)",
+    )
 
     args = parser.parse_args()
 
@@ -32,11 +44,11 @@ def main():
     server.set_server(args.server, port=args.port)
 
     if not server.has_newsgroup(args.newsgroup):
-        print(f'Error: newsgroup does not exist: {args.newsgroup}')
-        return 1 
+        print(f"Error: newsgroup does not exist: {args.newsgroup}")
+        return 1
 
-    print(f'Canceling messages in {args.newsgroup}') 
+    print(f"Canceling messages in {args.newsgroup}")
 
     server.cancel_newsgroup(args.newsgroup)
-    
+
     return 0

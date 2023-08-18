@@ -20,18 +20,18 @@
 ###########################################################################
 
 import argparse
+import fnmatch
 import cmd
 import os
-import sys
-import fnmatch
-import xmlrpc.client
-import traceback
 import socket
+import xmlrpc.client
 
 socket.setdefaulttimeout(100)
 
 
 class Console(cmd.Cmd):
+    """XMLRPC Console"""
+
     def __init__(self, args):
         cmd.Cmd.__init__(self)
 
@@ -45,15 +45,18 @@ class Console(cmd.Cmd):
         if not os.path.exists(self.configdir):
             os.makedirs(self.configdir)
 
-        self.loadHistory()
+        self.load_history()
 
-        self.serviceCache = {} 
+        self.service_cache = {}
 
     def connect(self, service):
+        """Connect to directory"""
+
         url = self.directory.get(service, "url")
         return xmlrpc.client.ServerProxy(url)
 
     def make_intro(self):
+        """Banner"""
 
         width = 75
         intro = []
@@ -68,62 +71,64 @@ class Console(cmd.Cmd):
 
     # -- History --------------------------------------------------------
 
-    def loadHistory(self):
+    def load_history(self):
+        """Load history"""
 
-        self.historyCache = {}
-        self.historyIndex = 0
+        self.history_cache = {}
+        self.history_index = 0
 
         if not os.path.exists(self.configfile):
             return
 
-        for entry in open(self.configfile):
-            index, cmd = entry.split(":", 1)
-            index = int(index)
-            self.historyCache[index] = cmd.strip()
-            self.historyIndex = max(self.historyIndex, index)
+        with open(self.configfile, "rt", encoding="utf-8") as f:
+            for entry in f:
+                index, command = entry.split(":", 1)
+                index = int(index)
+                self.history_cache[index] = command.strip()
+                self.history_index = max(self.history_index, index)
 
-        self.trimHistory()
+        self.trim_history()
 
-    def saveHistory(self):
+    def save_history(self):
+        """Save history"""
 
-        with open(self.configfile, "wt") as output:
-
-            keys = sorted(self.historyCache)
+        with open(self.configfile, "wt", encoding="utf-8") as output:
+            keys = sorted(self.history_cache)
 
             for index in keys:
-                print(f"{index}: {self.historyCache[index]}", file=output)
+                output.write(f"{index}: {self.history_cache[index]}")
 
+    def trim_history(self):
+        """Trim history entries"""
 
-    def trimHistory(self):
+        cutoff = self.history_index - self.options.maxhistory + 1
 
-        cutoff = self.historyIndex - self.options.maxhistory + 1
-
-        for index in list(self.historyCache.keys()):
+        for index in list(self.history_cache.keys()):
             if index < cutoff:
-                del self.historyCache[index]
+                del self.history_cache[index]
 
-    def do_clear(self, arg):
+    def do_clear(self, _arg):
         """clear history cache"""
 
-        self.historyCache = {}
-        self.historyIndex = 0
-        self.saveHistory()
+        self.history_cache = {}
+        self.history_index = 0
+        self.save_history()
 
     def do_shell(self, args):
         """Run previous commands"""
 
         args = [int(x) for x in args.split()]
         for index in args:
-            if self.onecmd(self.historyCache[index]):
+            if self.onecmd(self.history_cache[index]):
                 return True
 
         return False
 
-    def do_history(self, args):
+    def do_history(self, _args):
         """history - print a list of commands that have been entered"""
 
-        for index in sorted(self.historyCache):
-            print(f"{index:2}: {self.historyCache[index]}")
+        for index in sorted(self.history_cache):
+            print(f"{index:2}: {self.history_cache[index]}")
 
         return False
 
@@ -146,55 +151,57 @@ class Console(cmd.Cmd):
 
         try:
             self.directory.ident()
-            print(f"Connected to directory at {host}:{port}")
-        except:
-            print(f"Error connecting to directory on {host}:{port}")
+        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
+            print(f"Error connecting to directory on {host}:{port}: {err}")
+            return ""
+
+        print(f"Connected to directory at {host}:{port}")
 
         self.prompt = f"[{host}:{port}] >>> "
 
         return self.onecmd("refresh")
 
-    def do_refresh(self, arg):
+    def do_refresh(self, _arg):
         """refresh -- Refresh list of services for autocompletion"""
 
         print("Refreshing service list ...")
-        self.serviceCache = {}
+        self.service_cache = {}
 
         try:
             for service in self.directory.list():
                 label = self.directory.get(service, "label")
                 host = self.directory.get(service, "host")
                 port = self.directory.get(service, "port")
-                self.serviceCache[service] = (label, host, port)
-        except:
-            print("Error connecting to server")
+                self.service_cache[service] = (label, host, port)
+        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
+            print(f"Error connecting to server: {err}")
 
-        print(f"Refreshed -- {len(self.serviceCache)} services")
+        print(f"Refreshed -- {len(self.service_cache)} services")
 
         return False
 
     # -- Listing ------------------------------------------------------
 
-    def do_services(self, arg):
+    def do_services(self, _arg):
         """services -- list registered services"""
 
         # If we do not have a cache, refresh first
 
-        if not self.serviceCache:
+        if not self.service_cache:
             self.onecmd("refresh")
 
-        if not self.serviceCache:
+        if not self.service_cache:
             print("No services are registered")
             return False
 
-        names = sorted(self.serviceCache)
+        names = sorted(self.service_cache)
 
         print(f"There are {len(names)} services registered:")
 
-        width = max([len(x) for x in names])
+        width = max(len(x) for x in names)
 
         for name in names:
-            label, host, port = self.serviceCache[name]
+            label, host, port = self.service_cache[name]
             print(f"[{host}:{port}] {name.ljust(width)} - {label}")
 
         return False
@@ -205,36 +212,38 @@ class Console(cmd.Cmd):
         if not arg:
             return self.onecmd("services")
 
-        if arg not in self.serviceCache:
+        if arg not in self.service_cache:
             print("no service by that name. need to refresh?")
             return False
 
         try:
             service = self.connect(arg)
             commands = sorted(service.system.listMethods())
-        except:
-            print("problem communicating with service")
+        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
+            print(f"problem communicating with service: {err}")
             return False
 
         print(f"There are {len(commands)} commands in {arg}:")
-
-        width = max([len(x) for x in commands])
 
         for name in commands:
             print(f"  {name}")
 
         return False
 
-    def complete_list(self, text, line, begidx, endidx):
-        names = self.serviceCache.keys()
+    def complete_list(self, text, line, _begidx, _endidx):
+        """Autocompletion handler"""
+
+        names = self.service_cache.keys()
         prefix = line.split()[1].strip()
         matches = fnmatch.filter(names, prefix + "*")
         matches = [name.replace(prefix, text) for name in matches]
+
         return matches
 
     # -- Execute ---------------------------------------------------------
 
     def do_run(self, arg):
+        """Run command handler"""
 
         arg = arg.split()
 
@@ -244,8 +253,8 @@ class Console(cmd.Cmd):
 
         try:
             service = self.connect(arg[0])
-        except:
-            print(f"Failed to connect to {arg[0]}")
+        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
+            print(f"Failed to connect to {arg[0]}: {err}")
             return False
 
         method = arg[1]
@@ -255,32 +264,31 @@ class Console(cmd.Cmd):
 
         try:
             print(func(*params))
-        except:
-            print(f"Problem running command:")
-            traceback.print_exc(1)
+        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
+            print(f"Problem running command: {err}")
 
         return False
 
     # -- Control ---------------------------------------------------------
 
-    def do_quit(self, arg):
+    def do_quit(self, _arg):
         """quit -- terminates the application"""
         return True
 
     def preloop(self):
         cmd.Cmd.preloop(self)
-        self.serviceCache = {}
+        self.service_cache = {}
 
     def postloop(self):
         cmd.Cmd.postloop(self)
-        self.saveHistory()
+        self.save_history()
         print("Exiting...")
 
     def precmd(self, line):
         if line and not line.startswith("!"):
-            self.historyIndex += 1
-            self.historyCache[self.historyIndex] = line.strip()
-            self.trimHistory()
+            self.history_index += 1
+            self.history_cache[self.history_index] = line.strip()
+            self.trim_history()
         return line
 
     def emptyline(self):
@@ -297,6 +305,7 @@ class Console(cmd.Cmd):
 
 
 def main():
+    """Script entry point"""
 
     parser = argparse.ArgumentParser(
         description="Data Transport XMLRPC Service Console"
@@ -328,4 +337,9 @@ def main():
 
     args = parser.parse_args()
 
-    Console(args).cmdloop()
+    try:
+        Console(args).cmdloop()
+    except KeyboardInterrupt:
+        print("")
+
+    print("Exiting")
