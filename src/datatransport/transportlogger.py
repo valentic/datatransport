@@ -9,6 +9,9 @@
 #               Add missing comment block header
 #               Use get_* methods
 #
+#   2023-08-17  Todd Valentic
+#               Clear handlers when creating 
+#
 ##########################################################################
 
 import logging
@@ -63,6 +66,8 @@ def create_transport_logger(config, name):
     formatter = _setup_log_formatter()
 
     logger = logging.getLogger(name)
+
+    logger.handlers.clear()
 
     if config.get_boolean("log.file.enable", True):
         logger.addHandler(_setup_log_file_handler(config, formatter))
