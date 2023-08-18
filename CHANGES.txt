@@ -1,3 +1,13 @@
+2023-08-17  Todd Valentic
+    - listnewsgroups. Add port option
+    - transportlogger. Clear handlers on creation
+    - transportctl. Code cleanup and improved error reporting
+    - cancelnewsgroup. PEP8 compliance 
+    - console. PEP8 compliance 
+    - listnewsgroup. PEP8 compliance 
+    - transport-create-app. PEP8 compliance 
+    - Release 3.0.12
+
 2023-08-11  Todd Valentic
     - transport-create-app. Make sure to link transportctl to bin
     - NewsgroupMonitor. Fix import to use apps 
