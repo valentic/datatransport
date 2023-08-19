@@ -127,7 +127,6 @@
 
 import fnmatch
 import nntplib
-import socket
 
 from datatransport import AccessMixin
 from datatransport import newstool
@@ -231,19 +230,28 @@ class NewsPoster(AccessMixin):
         control = newstool.NewsControl()
         control.set_server(host, port)
 
+        retry_secs = 15
+
         if creategroup:
             while self.is_running():
                 try:
                     self.create_newsgroups(control, newsgroups)
                     break
-                except socket.error as e:
-                    self.abort(f"Error connecting to news server: {host}:{port} {e}")
-                except nntplib.NNTPError as e:
-                    self.abort(f"Error creating news group: {host}:{port} {e}")
+                except OSError as err:
+                    self.log.error("Problem connecting to %s:%s: %s:", host, port, err)
+                except nntplib.NNTPTemporaryError as err:
+                    self.log.error(
+                        "Problem creating news group on %s:%s: %s", host, port, err
+                    )
+                except nntplib.NNTPPermanentError as err:
+                    self.abort(
+                        "Failed to create news group on %s:%s: %s", host, port, err
+                    )
                 except:  # pylint: disable=bare-except
-                    self.log.exception("Error creating group:")
+                    self.log.exception("Error creating news group:")
                     self.abort("Cannot create the posting newsgroup")
 
-                self.wait(15)
+                self.log.info("  retry in %s seconds", retry_secs)
+                self.wait(retry_secs)
 
         return poster
