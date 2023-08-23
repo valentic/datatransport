@@ -95,8 +95,12 @@ def link_programs(basepath):
     programs = [
         "cancelnewsgroup",
         "console",
+        "createnewsgroup",
         "listnewsgroups",
+        "rmnewsgroup",
         "transport-create-app",
+        "transport-get-article",
+        "transport-post-article",
         "transportctl",
         "transportd",
         "transportps",
