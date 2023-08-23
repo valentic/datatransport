@@ -1,9 +1,12 @@
-2023-08-19  Todd Valentic
-    - newsposter. Retry on most errors when creating newsgroups.
+2023-08-23  Todd Valentic
     - Update getarticle. Renamed transport-get-article
     - Update postsrticle. Renamed transport-post-article
-    - Update rmnewsgroup. 
-    - Update createnewsgroup. 
+    - Update rmnewsgroup
+    - Update createnewsgroup
+    - Release 3.0.14
+
+2023-08-19  Todd Valentic
+    - newsposter. Retry on most errors when creating newsgroups
     - Release 3.0.13
 
 2023-08-17  Todd Valentic
