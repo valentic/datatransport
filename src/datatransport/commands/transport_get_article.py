@@ -28,12 +28,18 @@
 #               Use argparse
 #               Add signal handling
 #               Add no save option
+#               Add uncompress option
+#               Add output directory option
 #
 #####################################################################
 
 import argparse
+import bz2
 import fnmatch
+import gzip
 import logging
+import pathlib
+import shutil
 import signal
 import sys
 import time
@@ -42,6 +48,7 @@ import threading
 from datatransport import newstool
 
 VERSION = "1.0"
+
 
 class NewsgroupPoller:
     """Monitor a single newsgroup"""
@@ -59,6 +66,7 @@ class NewsgroupPoller:
         self.poller.set_stop_func(self.done.is_set)
         self.poller.set_debug(self.args.debug)
         self.poller.set_single_shot(True)
+        self.poller.set_last_read_path(self.args.trackdir)
         self.poller.set_last_read_prefix(".track")
 
         self.poller.set_callback(self.process)
@@ -66,13 +74,42 @@ class NewsgroupPoller:
         if self.args.catchup:
             self.poller.mark_read(self.args.catchup)
 
+    def uncompress(self, filename):
+        """Uncompress file"""
+
+        if not self.args.uncompress:
+            return filename
+
+        outname = filename.with_suffix("")
+
+        if filename.suffix == ".bz2":
+            handler = bz2.BZ2File
+        elif filename.suffix == ".gz":
+            handler = gzip.GzipFile
+        else:
+            return filename
+
+        with handler(filename, "rb") as infile, outname.open("wb") as outfile:
+            shutil.copyfileobj(infile, outfile)
+
+        filename.unlink()
+
+        return outname
+
     def process(self, message):
         """Message processor"""
 
-        filenames = newstool.save_files(message, write=self.args.save)
+        output = self.args.outputdir
+
+        if self.args.addgroupdir:
+            output = output.joinpath(message["Newsgroups"])
+
+        filenames = newstool.save_files(message, write=self.args.save, path=output)
         self.log.info("Received files from %s", message["Newsgroups"])
+
         for filename in filenames:
-            self.log.info("  - %s", filename)
+            filename = self.uncompress(filename)
+            self.log.info("  - %s", filename.name)
 
         if self.args.oneshot:
             self.finished = True
@@ -114,9 +151,9 @@ class Downloader:
     def show_config(self):
         """Display banner and configuration options"""
 
-        self.log.info("="*75)
+        self.log.info("=" * 75)
         self.log.info("Data Transport News Article Downloader %s", VERSION)
-        self.log.info("="*75)
+        self.log.info("=" * 75)
 
         self.log.info("Press Ctrl-C to exit")
         self.log.info("")
@@ -125,13 +162,14 @@ class Downloader:
         self.log.info("One shot: %s", self.args.oneshot)
         self.log.info("Catchup: %s", self.args.catchup)
         self.log.info("Save files: %s", self.args.save)
+        self.log.info("Output path: %s", self.args.outputdir)
 
         self.log.info("Watching newsgroups:")
 
         for poller in self.pollers.values():
             self.log.info("  %s", poller.newsgroup)
 
-        self.log.info("-"*75)
+        self.log.info("-" * 75)
 
     def parse_command_line(self):
         """Parse the command line"""
@@ -157,7 +195,7 @@ class Downloader:
         )
 
         parser.add_argument(
-            "-t",
+            "-e",
             "--oneshot",
             action="store_true",
             help="Exit after one message is received from each newsgroup",
@@ -167,8 +205,38 @@ class Downloader:
             "-n",
             "--nosave",
             action="store_false",
-            dest='save',
+            dest="save",
             help="Don't save files, just report",
+        )
+
+        parser.add_argument(
+            "-u",
+            "--uncompress",
+            action="store_true",
+            help="Uncompress gz or bz2 files",
+        )
+
+        parser.add_argument(
+            "-o",
+            "--outputdir",
+            default=".",
+            type=pathlib.Path,
+            help="Store files in this directory",
+        )
+
+        parser.add_argument(
+            "-g",
+            "--addgroupdir",
+            action="store_true",
+            help="Add newsgroup name to output directory",
+        )
+
+        parser.add_argument(
+            "-t",
+            "--trackdir",
+            default=".",
+            type=pathlib.Path,
+            help="Store tracking files in this directory",
         )
 
         parser.add_argument(
