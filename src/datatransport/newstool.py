@@ -353,6 +353,9 @@
 #                   characters. The Python splitting altogrithm worked,
 #                   but innd does not appear to support multiline headers.
 #
+#   2023-08-23  Todd Valentic
+#               Add ability to set path for NewsPoller last read file
+#
 ###########################################################################
 
 import collections
@@ -830,6 +833,7 @@ class NewsPoller(NewsTool):
         self.set_retry_wait(60)
         self.set_stop_func(self.default_stop)
         self.set_last_read_prefix("")
+        self.set_last_read_path(".")
 
     # Configuration variables ---------------------------------------------
 
@@ -861,6 +865,9 @@ class NewsPoller(NewsTool):
         else:
             self.last_read_prefix = ""
 
+    def set_last_read_path(self, path):
+        self.last_read_path = pathlib.Path(path)
+
     # Methods -------------------------------------------------------------
 
     def default_stop(self):
@@ -873,7 +880,8 @@ class NewsPoller(NewsTool):
 
     def last_read_filename(self):
         """Return the filename of the last_read tracking file"""
-        return pathlib.Path(self.last_read_prefix + self.newsgroup_header)
+        filename = self.last_read_prefix + self.newsgroup_header
+        return self.last_read_path.joinpath(filename)
 
     def save_last_read(self, article_num):
         """Update the last read tracking file"""
