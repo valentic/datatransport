@@ -1,4 +1,9 @@
 2023-08-23  Todd Valentic
+    - transport-get-article. Add output directory and uncompress options
+    - newstool. Add set_last_read_path to store tracking file location
+    - Release 3.0.16
+
+2023-08-23  Todd Valentic
     - Make sure utility programs are linked into bin 
     - Release 3.0.15
 
