@@ -355,6 +355,7 @@
 #
 #   2023-08-23  Todd Valentic
 #               Add ability to set path for NewsPoller last read file
+#               Create last read file path if necessary
 #
 ###########################################################################
 
@@ -885,6 +886,8 @@ class NewsPoller(NewsTool):
 
     def save_last_read(self, article_num):
         """Update the last read tracking file"""
+        output = self.last_read_filename()
+        output.parent.mkdir(parents=True, exist_ok=True)
         self.last_read_filename().write_text(str(article_num), "UTF-8")
 
     def load_last_read(self):
