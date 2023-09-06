@@ -1,3 +1,9 @@
+2023-08-29  Todd Valentic
+    - transportctl. Missing f-string in client list
+    - directoryservice. Return info dictionary for list()
+    - console. Handle new directory.list() format
+    - Release 3.0.18
+
 2023-08-23  Todd Valentic
     - newstool. Create path for last read file if needed
     - Release 3.0.17

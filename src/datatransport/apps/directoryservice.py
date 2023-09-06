@@ -30,6 +30,9 @@
 #   2023-07-27  Todd Valentic
 #               Updated for transport3 / python3
 #
+#   2023-09-06  Todd Valentic
+#               Return dict in list
+#
 ##########################################################################
 
 import sys
@@ -55,6 +58,16 @@ class Service(ConfigComponent):
         if not self.port:
             raise ValueError("No port specified")
 
+    def info(self):
+        
+        return {
+            "host": self.host,
+            "port": self.port,
+            "scheme": self.scheme,
+            "label": self.label,
+            "url": self.url,
+            "hold": self.hold
+        }
 
 class DirectoryService(ProcessClient):
     """Process Client"""
@@ -81,7 +94,12 @@ class DirectoryService(ProcessClient):
     def list(self):
         """List services"""
 
-        return list(self.services)
+        results = {}
+
+        for name, service in self.services.items():
+            results[name] = service.info()
+
+        return results 
 
     def lookup(self, name, key):
         """Lookup data on service component"""

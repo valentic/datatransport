@@ -17,6 +17,9 @@
 #               Python3 port
 #               optparse -> argparse
 #
+#   2023-09-06  Todd Valentic
+#               list() return format is now a dictionary
+#
 ###########################################################################
 
 import argparse
@@ -168,11 +171,20 @@ class Console(cmd.Cmd):
         self.service_cache = {}
 
         try:
-            for service in self.directory.list():
-                label = self.directory.get(service, "label")
-                host = self.directory.get(service, "host")
-                port = self.directory.get(service, "port")
-                self.service_cache[service] = (label, host, port)
+            services = self.directory.list()
+            if isinstance(services, list):
+                # Handle older format 
+                for service in services: 
+                    label = self.directory.get(service, "label")
+                    host = self.directory.get(service, "host")
+                    port = self.directory.get(service, "port")
+                    self.service_cache[service] = (label, host, port)
+            else:
+                for service, info in services.items():
+                    label = info["label"]
+                    host = info["host"]
+                    port = info["port"]
+                    self.service_cache[service] = (label, host, port)
         except (ConnectionRefusedError, xmlrpc.client.Error) as err:
             print(f"Error connecting to server: {err}")
 

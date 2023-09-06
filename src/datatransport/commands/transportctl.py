@@ -52,6 +52,9 @@
 #               Improve error checking
 #               PEP8 compliance
 #
+#   2023-08-29  Todd Valentic
+#               Missing f-string in list clients
+#
 ############################################################################
 
 import json
@@ -262,7 +265,7 @@ class TransportControl:
         self.has_group_or_exit(group)
 
         clients = self.server.listclients(group)
-        print("There are {len(clients)} clients listed for the group {group}")
+        print(f"There are {len(clients)} clients listed for the group {group}")
         for client, info in clients.items():
             print(client, info)
         return 0
