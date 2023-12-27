@@ -17,6 +17,10 @@
 #               Updated for transport3 / python3
 #               Add command line options
 #
+#   2023-11-09  Todd Valentic
+#               Add filename option
+#               Version 1.1
+#
 #####################################################################
 
 import argparse
@@ -25,7 +29,7 @@ import time
 
 from datatransport import newstool
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 
 def main():
@@ -43,17 +47,32 @@ def main():
         "-p", "--port", default=119, type=int, help="News server port (default: 119)"
     )
     parser.add_argument(
-        "-y", "--yes", action="store_true", help="Automatically confirm removal"
+        "-f", "--filename", help="Read newsgroup names from file"
     )
 
-    parser.add_argument("newsgroups", nargs="+", metavar="newsgroup")
+    parser.add_argument("newsgroups", nargs="*", metavar="newsgroup")
 
     args = parser.parse_args()
+
+    newsgroups = []
+    newsgroups.extend(args.newsgroups)
+
+    if args.filename:
+        with open(args.filename, encoding="utf8") as f: 
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                newsgroups.append(line)
+
+    if not newsgroups: 
+        print("No newsgroups listed")
+        sys.exit(0)
 
     server = newstool.NewsControl()
     server.set_server(args.server, port=args.port)
 
-    for newsgroup in args.newsgroups:
+    for newsgroup in newsgroups:
         if server.has_newsgroup(newsgroup):
             print(f"The newsgroup already exists: {newsgroup}")
             continue

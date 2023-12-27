@@ -1,3 +1,13 @@
+2023-11-09  Todd Valentic
+    - createnewsgroup. Add filename paramater to read names from file
+    - console. Add pprint
+
+2023-11-01  Todd Valentic
+    - transport_get_article. Append message id to default body name
+
+2023-10-06  Todd Valentic
+    - Add directory.py to contrib
+
 2023-08-29  Todd Valentic
     - transportctl. Missing f-string in client list
     - directoryservice. Return info dictionary for list()

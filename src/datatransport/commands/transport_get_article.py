@@ -31,6 +31,9 @@
 #               Add uncompress option
 #               Add output directory option
 #
+#   2023-11-01  Todd Valentic
+#               Append message ID to name when message in body
+#
 #####################################################################
 
 import argparse
@@ -47,7 +50,7 @@ import threading
 
 from datatransport import newstool
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 
 class NewsgroupPoller:
@@ -104,7 +107,11 @@ class NewsgroupPoller:
         if self.args.addgroupdir:
             output = output.joinpath(message["Newsgroups"])
 
-        filenames = newstool.save_files(message, write=self.args.save, path=output)
+        msgnum = message["Xref"].rsplit(":", 1)[-1]
+        name = f"body-{msgnum}.txt"
+        filenames = newstool.save_files(
+            message, default=name, write=self.args.save, path=output
+        )
         self.log.info("Received files from %s", message["Newsgroups"])
 
         for filename in filenames:
