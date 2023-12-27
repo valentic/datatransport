@@ -20,17 +20,22 @@
 #   2023-09-06  Todd Valentic
 #               list() return format is now a dictionary
 #
+#   2023-19-07  Todd Valentic
+#               Add pprint option
+#
 ###########################################################################
 
 import argparse
 import fnmatch
 import cmd
 import os
+import pprint
 import socket
 import xmlrpc.client
 
 socket.setdefaulttimeout(100)
 
+VERSION=1.1
 
 class Console(cmd.Cmd):
     """XMLRPC Console"""
@@ -41,6 +46,7 @@ class Console(cmd.Cmd):
         self.intro = self.make_intro()
         self.prompt = "[not connected] >>> "
         self.options = args
+        self.pprint = True
 
         self.configdir = os.path.expanduser("~/.acorn")
         self.configfile = os.path.join(self.configdir, "history")
@@ -65,7 +71,7 @@ class Console(cmd.Cmd):
         intro = []
         intro.append("")
         intro.append("-" * width)
-        intro.append("XML-RPC Service Control Console 1.0".center(width))
+        intro.append(f"XML-RPC Service Control Console {VERSION}".center(width))
         intro.append('Type "help" for a list commands'.center(width))
         intro.append("-" * width)
         intro.append("")
@@ -275,11 +281,31 @@ class Console(cmd.Cmd):
         func = getattr(service, method)
 
         try:
-            print(func(*params))
+            output = func(*params)
         except (ConnectionRefusedError, xmlrpc.client.Error) as err:
             print(f"Problem running command: {err}")
+            return False
+
+        if self.pprint:
+            pprint.pprint(output)
+        else:
+            print(output)
 
         return False
+
+    # -- Options ---------------------------------------------------------
+
+    def do_pprint(self, state):
+        """Set pretty printing state (on | off)"""
+
+        if state == "on":
+            self.pprint = True 
+        elif state == "off":
+            self.pprint = False 
+        else:
+            print(f"pprint is {'on' if self.pprint else 'off'}")
+
+        return False 
 
     # -- Control ---------------------------------------------------------
 
