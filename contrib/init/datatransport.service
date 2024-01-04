@@ -1,0 +1,15 @@
+[Unit]
+Description=Data Transport Daemon
+After=syslog.target network.target
+Wants=innd.service
+
+[Service]
+User=transport
+Group=transport
+Type=simple
+ExecStart=/opt/transport/bin/transportd
+ExecStop=/bin/su -m transport -c '/opt/transport/bin/transportctl stop'
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
