@@ -1,3 +1,9 @@
+2024-01-04  Todd Valentic
+    - Add systemd unit file
+    - Add bash autocomplete file
+    - Add supervisord file
+    - Release 3.0.19
+
 2023-11-09  Todd Valentic
     - createnewsgroup. Add filename paramater to read names from file
     - console. Add pprint
