@@ -1,0 +1,46 @@
+# bash autocompletion file for transportctl. Copy to /etc/bash_completion.d/
+
+_transportctl()
+{
+    local cur prev opts 
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Options we are completing
+
+    opts=$(transportctl | tail -n +5 | head -n -2 | sed -e 's/^[ \t]*//' | cut -d' ' -f1)
+
+    # Complete the arguments
+
+    case "${prev}" in
+        start | stop | restart | list)
+            local groups=$(transportctl list | sed -e 's/^[ ]*//' | cut -d' ' -f1 | tail -n +2)
+            COMPREPLY=( $(compgen -W "${groups}" -- ${cur}) )
+            return 0
+            ;;
+        *)
+        ;;
+    esac
+
+    COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+    return 0
+}
+
+_viewlog()
+{
+    local cur prev groups 
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    groups=$(transportctl list | sed -e 's/^[ ]*//' | cut -d' ' -f1 | tail -n +2)
+
+    COMPREPLY=($(compgen -W "${groups}" -- ${cur}))
+    return 0
+}
+
+complete -F _transportctl transportctl
+complete -F _viewlog viewlog 
+
+
