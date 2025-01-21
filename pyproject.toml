@@ -22,8 +22,8 @@ dependencies = [
     "sapphire_config",
     "texttable",
     "importlib_resources>1.3; python_version < '3.10'",
-    "standard-nntplib; python_version > '3.12'",
-    "standard-asyncore; python_version > '3.12'"
+    "standard-nntplib; python_version >= '3.12'",
+    "standard-asyncore; python_version >= '3.12'"
 ]
 
 [build-system]
