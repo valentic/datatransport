@@ -1,3 +1,8 @@
+2025-01-20  Todd Valentic
+    - Switch to hatchling for build backend, support uv
+    - Cleanup pyproject.toml devel dependencies
+    - Release 3.0.20
+
 2024-01-04  Todd Valentic
     - Add systemd unit file
     - Add bash autocomplete file
