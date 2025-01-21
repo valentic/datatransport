@@ -1,4 +1,9 @@
 2025-01-20  Todd Valentic
+    - Require external nntplib and asyncore packages for Python 3.12+ 
+    - They were removed from the standard library. 
+    - Release 3.0.21
+
+2025-01-20  Todd Valentic
     - Switch to hatchling for build backend, support uv
     - Cleanup pyproject.toml devel dependencies
     - Release 3.0.20
