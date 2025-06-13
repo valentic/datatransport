@@ -498,9 +498,9 @@ class NewsTool:
     """NewsTool base class"""
 
     def __init__(self):
+        self.set_log(logging)
         self.set_server("localhost")
         self.set_newsgroup("test")
-        self.set_log(logging)
         self.set_timeout(60)
 
     # Configuration variables ---------------------------------------------
