@@ -34,6 +34,15 @@
 #   2023-11-01  Todd Valentic
 #               Append message ID to name when message in body
 #
+#   2025-04-29  Todd Valentic
+#               Sometimes the attached files have the same name
+#                   in each message (i.e. track.dat), resulting
+#                   in the file being over written each time.
+#                   To prevent this, append message ID if the 
+#                   name already exists and the -m / --add-msgid
+#                   option is given. 
+#               Version 1.2
+#
 #####################################################################
 
 import argparse
@@ -50,7 +59,7 @@ import threading
 
 from datatransport import newstool
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 
 class NewsgroupPoller:
@@ -108,13 +117,23 @@ class NewsgroupPoller:
             output = output.joinpath(message["Newsgroups"])
 
         msgnum = message["Xref"].rsplit(":", 1)[-1]
-        name = f"body-{msgnum}.txt"
         filenames = newstool.save_files(
-            message, default=name, write=self.args.save, path=output
+            message, write=self.args.save, path=output
         )
         self.log.info("Received files from %s", message["Newsgroups"])
 
         for filename in filenames:
+
+            if self.args.add_msgnum:
+                # note - there might be multiple suffixess
+                stem, suffix = filename.name.split(".", 1)
+                newname = f"{stem}-{msgnum}"
+                if suffix:
+                    suffix = "." + suffix 
+                newname = filename.parent / f"{stem}-{msgnum}{suffix}"
+                filename.rename(newname)
+                filename = newname
+
             filename = self.uncompress(filename)
             self.log.info("  - %s", filename.name)
 
@@ -206,6 +225,14 @@ class Downloader:
             "--oneshot",
             action="store_true",
             help="Exit after one message is received from each newsgroup",
+        )
+
+        parser.add_argument(
+            "-m",
+            "--add_msgnum",
+            action="store_true",
+            dest="add_msgnum",
+            help="Append message number to output filenames",
         )
 
         parser.add_argument(
