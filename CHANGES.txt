@@ -1,3 +1,15 @@
+2025-04-29  Todd Valentic
+    - Add ability to save unique filenames to transport-get-article (1.2)
+    - Release 3.0.23
+
+2025-04-12  Todd Valentic
+    - Update systemd unit file (environment variable, restart)
+    - Require main transport.conf file to be present
+    - Escape backshlashes in PlotTool
+    - Fixed abort message handling in create_newsposter 
+    - Log create news group info message before trying create
+    - Release 3.0.22
+
 2025-01-20  Todd Valentic
     - Require external nntplib and asyncore packages for Python 3.12+ 
     - They were removed from the standard library. 
