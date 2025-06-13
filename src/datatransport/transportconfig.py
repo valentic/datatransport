@@ -50,10 +50,14 @@
 #   2023-07-09  Todd Valentic
 #               Add find_config_files() method
 #
+#   2025-04-15  Todd Valentic
+#               Ensure main transportd.conf file is present
+#
 #############################################################################
 
+import errno
 import os
-import pathlib
+from pathlib import Path 
 
 import sapphire_config as sapphire
 
@@ -62,22 +66,23 @@ class TransportConfig(sapphire.Parser):
     """Transport configuration"""
 
     def __init__(self, defaults=None):
-        try:
-            prefix = os.environ["DATA_TRANSPORT_PATH"]
-        except KeyError:
-            prefix = "/opt/transport"
-
-        confdir = pathlib.Path(prefix, "etc")
-
+        prefix = os.environ.get("DATA_TRANSPORT_PATH", "/opt/transport")
+        confdir = Path(prefix, "etc")
         mainconf = confdir.joinpath("transportd.conf")
+
+        if not mainconf.exists():
+            raise FileNotFoundError(
+                errno.ENOENT,
+                os.strerror(errno.ENOENT),
+                str(mainconf)
+            )
 
         filenames = sorted(confdir.glob("*.conf"))
 
         # make sure transportd.conf is read first
 
-        if mainconf in filenames:
-            filenames.remove(mainconf)
-            filenames.insert(0, mainconf)
+        filenames.remove(mainconf)
+        filenames.insert(0, mainconf)
 
         super().__init__(defaults=defaults)
 
@@ -97,7 +102,7 @@ class TransportConfig(sapphire.Parser):
 
         configpaths = []
 
-        for path in reversed(pathlib.Path(groupname,'x').parents):
+        for path in reversed(Path(groupname,'x').parents):
             curpath = basepath.joinpath(path)
 
             configpaths.extend(glob_conf(curpath, 'conf'))
