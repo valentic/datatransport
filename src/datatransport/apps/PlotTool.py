@@ -170,6 +170,9 @@
 #               Use config get_ methods
 #               NewsPoller
 #
+#   2025-04-15  Todd Valentic
+#               Escape \ when creating command strings
+#
 #####################################################################
 
 import fnmatch
@@ -390,13 +393,13 @@ class Variable(ConfigComponent):
         self.log.info("        sql         :  %s" % self.sql)
 
         if self.start:
-            self.start = ":start=%s" % self.start.strftime("%H\:%M %Y%m%d")
+            self.start = ":start=%s" % self.start.strftime(r"%H\:%M %Y%m%d")
 
         if self.end and not self.start:
-            self.start = ":start=00\:00 01/01/1980"
+            self.start = r":start=00\:00 01/01/1980"
 
         if self.end:
-            self.end = ":end=%s" % self.end.strftime("%H\:%M %Y%m%d")
+            self.end = ":end=%s" % self.end.strftime(r"%H\:%M %Y%m%d")
 
         if self.shadow:
             self.database = os.path.join(self.plotgroup, self.shadow + ".rrd")
@@ -675,7 +678,7 @@ class Plot(ConfigComponent):
 
         if period.xlabel:
             xlabel = time.strftime(period.xlabel, time.localtime())
-            options.append("COMMENT:%s\c" % xlabel)
+            options.append(r"COMMENT:%s\c" % xlabel)
 
         if self.yticks:
             options.append("-y %s" % self.yticks)
