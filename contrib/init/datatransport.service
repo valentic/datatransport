@@ -4,12 +4,15 @@ After=syslog.target network.target
 Wants=innd.service
 
 [Service]
+Environment=DATA_TRANSPORT_PATH=/opt/transport
 User=transport
 Group=transport
-Type=simple
+Type=exec
 ExecStart=/opt/transport/bin/transportd
-ExecStop=/bin/su -m transport -c '/opt/transport/bin/transportctl stop'
+ExecStop=/opt/transport/bin/transportctl server stop
 KillMode=control-group
+Restart=on-failure
+RestartSec=60s
 
 [Install]
 WantedBy=multi-user.target
