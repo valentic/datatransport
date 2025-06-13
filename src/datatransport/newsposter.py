@@ -180,8 +180,8 @@ class NewsPoster(AccessMixin):
 
         for newsgroup in newsgroups:
             if not control.has_newsgroup(newsgroup):
-                control.newgroup(newsgroup)
                 self.log.info(f"Creating the post newsgroup {newsgroup} on {host}")
+                control.newgroup(newsgroup)
 
                 while not control.has_newsgroup(newsgroup):
                     self.log.info("Waiting for newsgroup to show up")
@@ -238,14 +238,18 @@ class NewsPoster(AccessMixin):
                     self.create_newsgroups(control, newsgroups)
                     break
                 except OSError as err:
-                    self.log.error("Problem connecting to %s:%s: %s:", host, port, err)
+                    self.log.error(
+                        "Problem connecting to %s:%s: %s:", 
+                        host, port, err
+                    )
                 except nntplib.NNTPTemporaryError as err:
                     self.log.error(
-                        "Problem creating news group on %s:%s: %s", host, port, err
+                        "Problem creating news group on %s:%s: %s", 
+                        host, port, err
                     )
                 except nntplib.NNTPPermanentError as err:
                     self.abort(
-                        "Failed to create news group on %s:%s: %s", host, port, err
+                        f"Failed to create news group {newsgroups} on {host}:{port}: {err}"
                     )
                 except:  # pylint: disable=bare-except
                     self.log.exception("Error creating news group:")
