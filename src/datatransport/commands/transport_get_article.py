@@ -43,6 +43,10 @@
 #                   option is given. 
 #               Version 1.2
 #
+#   2025-06-14  Todd Valentic
+#               Add processing script option 
+#               Version 1.3
+#
 #####################################################################
 
 import argparse
@@ -53,13 +57,14 @@ import logging
 import pathlib
 import shutil
 import signal
+import subprocess
 import sys
 import time
 import threading
 
 from datatransport import newstool
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 
 class NewsgroupPoller:
@@ -80,6 +85,7 @@ class NewsgroupPoller:
         self.poller.set_single_shot(True)
         self.poller.set_last_read_path(self.args.trackdir)
         self.poller.set_last_read_prefix(".track")
+        self.poller.set_debug(True)
 
         self.poller.set_callback(self.process)
 
@@ -108,19 +114,38 @@ class NewsgroupPoller:
 
         return outname
 
+    def run_script(self, script, newsgroup, timestamp, filenames):
+        """Run script on filenames"""
+
+        cmd = [script, newsgroup, f"{timestamp.isoformat()}"] + filenames
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            self.log.info("Processing script output: %s", result.stdout)
+        else:
+            self.log.error("Processing script output:")
+            self.log.error("  - exit code: %s", result.returncode)
+            self.log.error("  - stdout: %s", result.stdout.rstrip())
+            self.log.error("  - stderr: %s", result.stderr.rstrip())
+            raise RuntimeError("Processing script error")
+
     def process(self, message):
         """Message processor"""
 
+        newsgroup = message["Newsgroups"]
+        timestamp = newstool.message_date(message)
         output = self.args.outputdir
 
         if self.args.addgroupdir:
-            output = output.joinpath(message["Newsgroups"])
+            output = output.joinpath(newsgroup)
 
         msgnum = message["Xref"].rsplit(":", 1)[-1]
         filenames = newstool.save_files(
             message, write=self.args.save, path=output
         )
         self.log.info("Received files from %s", message["Newsgroups"])
+
+        saved_filenames = []
 
         for filename in filenames:
 
@@ -136,6 +161,12 @@ class NewsgroupPoller:
 
             filename = self.uncompress(filename)
             self.log.info("  - %s", filename.name)
+
+            saved_filenames.append(filename)
+
+        if self.args.script and saved_filenames:
+            self.log.debug("  - running %s", self.args.script)
+            self.run_script(self.args.script, newsgroup, timestamp, saved_filenames)
 
         if self.args.oneshot:
             self.finished = True
@@ -189,6 +220,8 @@ class Downloader:
         self.log.info("Catchup: %s", self.args.catchup)
         self.log.info("Save files: %s", self.args.save)
         self.log.info("Output path: %s", self.args.outputdir)
+        self.log.info("Run script: %s", self.args.script)
+        self.log.info("")
 
         self.log.info("Watching newsgroups:")
 
@@ -288,6 +321,13 @@ class Downloader:
             help="News server port (default: 119)",
         )
 
+        parser.add_argument(
+            "-r",
+            "--run",
+            dest="script",
+            help="Run script on output files",
+        )
+
         parser.add_argument("newsgroups", nargs="+", metavar="newsgroup")
 
         args = parser.parse_args()
@@ -328,33 +368,43 @@ class Downloader:
 
         return pollers
 
-    def run(self):
+    def polling_cycle(self, pollers):
         """Run a polling cycle for all of the monitored newsgroups"""
 
+        self.log.debug("Cycle start")
+
+        next_pollers = []
+
+        for poller in pollers:
+            if poller.run():
+                next_pollers.append(poller)
+
+        if self.args.oneshot and pollers:
+            self.log.debug("Waiting for messages from")
+            for poller in next_pollers:
+                self.log.debug("  %s", poller.newsgroup)
+
+        self.log.debug("Cycle finished")
+
+        return next_pollers
+
+    def run(self):
+
         pollers = self.pollers.values()
+        exit_code = 0
 
         while not self.done.is_set() and pollers:
-            self.log.debug("Cycle start")
-
-            next_pollers = []
-
-            for poller in pollers:
-                if poller.run():
-                    next_pollers.append(poller)
-
-            pollers = next_pollers
-
-            if self.args.oneshot and pollers:
-                self.log.debug("Waiting for messages from")
-                for poller in pollers:
-                    self.log.debug("  %s", poller.newsgroup)
-
-            self.log.debug("Cycle finished")
+            try:
+                pollers = self.polling_cycle(pollers)
+            except Exception:
+                exit_code = 1
+                break
 
             time.sleep(1)
 
-        return 0
+        return exit_code 
 
+    
 
 def main():
     """Script entry point"""

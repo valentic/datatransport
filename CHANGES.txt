@@ -1,3 +1,7 @@
+2025-06-16  Todd Valentic
+    - Add script option to transport-get-article (1.3)
+    - Release 3.0.24
+
 2025-04-29  Todd Valentic
     - Add ability to save unique filenames to transport-get-article (1.2)
     - Release 3.0.23
