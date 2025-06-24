@@ -1,0 +1,22 @@
+==========================================================================
+Container images for the Data Transport System
+==========================================================================
+
+2025-06-23  Todd Valentic
+            Initial implementation
+
+--------------------------------------------------------------------------
+Introduction
+--------------------------------------------------------------------------
+
+OCI container images used to run develop and run the Data Transport
+system. These are designed to be used by the podman engine.
+
+--------------------------------------------------------------------------
+Images
+--------------------------------------------------------------------------
+
+system  - Image for a complete system including inn and application
+inn     - Stand alone inn image
+app     - Stand alone data transport image
+

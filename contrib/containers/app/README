@@ -1,0 +1,19 @@
+==========================================================================
+Data Transport Application Container
+==========================================================================
+
+2025-06-20  Todd Valentic
+            Initial implementation
+
+--------------------------------------------------------------------------
+Introduction
+--------------------------------------------------------------------------
+
+This container image is just the data transport network. It would be 
+run in conjunction with another container having the news server. It
+also demonstrates building a small version from the python-slim base
+and a two-stage build to further reduce size.
+
+Containerfile.slim - Python slim image
+Containerfile.alma - AlmaLinux based version
+

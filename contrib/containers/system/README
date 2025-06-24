@@ -1,0 +1,84 @@
+==========================================================================
+Data Transport System Container
+==========================================================================
+
+2025-06-20  Todd Valentic
+            Initial implementation
+
+--------------------------------------------------------------------------
+Introduction
+--------------------------------------------------------------------------
+
+This image serves as a complete data transport system. It include the
+base AlmaLinux OS image, Python interpreter, data transport package and
+the INN news server. When running, external volumes can be mounted to
+persist the system state between runs. The container can preload the
+transport application into the image at the build stage or it can be
+used for application development.
+
+--------------------------------------------------------------------------
+Usage
+--------------------------------------------------------------------------
+
+Your transport application code goes into the transport/groups directory.
+Any Python dependencies should be added to the pyproject.toml file and the
+uv.lock file updated. When the container image is created, the transport
+directory will be copied into the image and the dependencies installed.
+
+The makefile can be used for building the image. There are also commands
+for starting a container based on the image, as well as stopping it and
+accessing a shell.
+
+The work flow would look like this:
+
+    - Update the transport code in transport/groups
+    - Add dependencies to pyproject.toml
+        
+        uv add <package>
+
+    - If needed, the lock can be updated with
+
+        uv lock
+
+    - Remove older versions of the container image
+
+        make clean
+
+    - Build new container image
+
+        make build
+
+    - Start an instance of the container
+
+        make start
+
+    - Access a shell
+
+        make shell
+
+        (run "exit" to leave)
+
+        Use make root-shell to run a shell as root
+
+    - To view the transport log files
+
+        make viewlog
+
+    - Stop the container instance
+
+        make stop
+
+    - To see all make commands:
+
+        make help
+
+The name of the image and container are listed in the makefile and can
+be supplied on the command line if needed. For example, running:
+
+    make build NAME=datatransport-myapp TAG=3.0
+
+would result in an image named datatransport-myapp:3.0 and a container
+started as datatransport-myapp.
+
+
+

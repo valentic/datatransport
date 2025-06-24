@@ -1,0 +1,49 @@
+##########################################################################
+#
+#   Data Transport Network Inn News Server Container
+#
+#   A wrinkle when installing the inn package is that it runs makedbz 
+#   to setup up the history databases, but it also checks to see if it
+#   has a valid hostname. During the build, we do not have a fully
+#   qualified one, so this step of the install fails. When we run the
+#   resulting container, innd does not start up properly.
+#
+#   Starting with inn-2.7.3, you can set the INN_HOSTNAME environment
+#   variable to work around this (makedbz simply tests if the hostname
+#   has a "." in it as an indication of a full hostname). As of EL 9.6,
+#   the version of inn is still 2.7.2 and doesn't support INN_HOSTNAME
+#   yet (the check also becomes a warning so the database initialization
+#   would actually have worked).
+#
+#   Until then, we need to hack the inn.conf file and set the domain
+#   option. We need to do this prior to installing the package, so we
+#   pull in one from the host directory. 
+#
+#   2025-06-09  Todd Valentic
+#               Initial implementation
+#
+##########################################################################
+
+FROM almalinux/9-init 
+
+ENV INN_HOSTNAME=placeholder.com
+
+# Work around until inn-2.7.3 is available as an rpm
+COPY --chown=9:13 news/etc/inn.conf /etc/news/
+
+RUN dnf install -y epel-release hostname telnet && \
+    crb enable && \
+    dnf install -y inn && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/microdnf
+
+# Copy the inn configuration and active files
+# The active file disables the moderation bit on the control groups
+
+COPY --chown=news:news news/etc/ /etc/news
+COPY --chown=news:news news/lib/ /var/lib/news 
+
+# Enable the service at boot 
+
+EXPOSE 119 
+RUN systemctl enable innd.service

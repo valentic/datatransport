@@ -1,0 +1,71 @@
+##########################################################################
+#
+#   Data Transport Network Base Container
+#
+#   https://rob.cogit8.org/posts/optimizing-django-docker-builds-with-astrals-uv/
+#
+#   2025-06-09  Todd Valentic
+#               Initial implementation
+#
+##########################################################################
+
+LABEL   name="datatransport-app" \
+        vendor="Todd Valentic" \
+        release="1" \
+        version="2025-06" \
+        summary="Data transport network base image" \
+        maintainer="Todd Valentic <todd.valentic@gmail.com>" \
+        description="The base container image for the Data Transport Network"
+
+FROM almalinux/9-init
+
+ARG PORT=8081 \
+    BUILD_GROUPS="" \
+    USER_NAME=transport \
+    USER_UID=1000 \
+    USER_GID=1000 
+
+ENV DATA_TRANSPORT_PATH=/opt/transport \ 
+    PORT=${PORT} \
+    PATH="/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_CACHE_DIR=/root/.cache/uv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_FROZEN=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    UV_PYTHON=3.12 \
+    UV_REQUIRE_HASHES=1 \
+    UV_VERIFY_HASHES=1 \
+    VIRTUAL_ENV=/venv
+
+COPY --from=ghcr.io/astral-sh/uv:0.7.13 /uv /usr/local/bin/
+
+RUN dnf install -y epel-release && \
+    crb enable && \ 
+    dnf install -y python3.12 && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/microdnf
+
+WORKDIR $DATA_TRANSPORT_PATH/groups 
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock,z \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml,z \
+    uv venv $VIRTUAL_ENV && \
+    uv sync --no-install-project --no-editable $BUILD_GROUPS && \
+    rm /usr/local/bin/uv
+
+# Copy what's needed to run datatransport 
+
+COPY --chown=$USER_UID:$USER_GID transport /opt/transport
+COPY datatransport.service /usr/lib/systemd/system/
+
+# Create the user/group and enable service
+
+RUN groupadd --gid $USER_GID $USER_NAME && \
+    useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME && \
+    systemctl enable datatransport.service
+

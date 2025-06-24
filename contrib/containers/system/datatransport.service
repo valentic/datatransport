@@ -1,0 +1,18 @@
+[Unit]
+Description=Data Transport Daemon
+After=syslog.target network.target
+Wants=innd.service
+
+[Service]
+Environment=DATA_TRANSPORT_PATH=/opt/transport
+User=transport
+Group=transport
+Type=exec
+ExecStart=/venv/bin/transportd
+ExecStop=/venv/bin/transportctl server stop
+KillMode=control-group
+Restart=on-failure
+RestartSec=60s
+
+[Install]
+WantedBy=multi-user.target

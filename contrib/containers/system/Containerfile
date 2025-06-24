@@ -1,0 +1,101 @@
+##########################################################################
+#
+#   Data Transport Network System 
+#
+#   This image contains a complete data transport system, including the
+#   news server and application code.
+#
+#   Note when installing inn news server:
+#
+#   A wrinkle when installing the inn package is that it runs makedbz 
+#   to setup up the history databases, but it also checks to see if it
+#   has a valid hostname. During the build, we do not have a fully
+#   qualified one, so this step of the install fails. When we run the
+#   resulting container, innd does not start up properly.
+#
+#   Starting with inn-2.7.3, you can set the INN_HOSTNAME environment
+#   variable to work around this (makedbz simply tests if the hostname
+#   has a "." in it as an indication of a full hostname). As of EL 9.6,
+#   the version of inn is still 2.7.2 and doesn't support INN_HOSTNAME
+#   yet (the check also becomes a warning so the database initialization
+#   would actually have worked).
+#
+#   Until then, we need to hack the inn.conf file and set the domain
+#   option. We need to do this prior to installing the package, so we
+#   pull in one from the host directory. 
+#
+#   2025-06-09  Todd Valentic
+#               Initial implementation
+#
+##########################################################################
+
+FROM almalinux/9-init 
+
+LABEL   name="datatransport-system" \
+        vendor="Todd Valentic" \
+        release="2025-06" \
+        summary="Data transport application" \
+        maintainer="Todd Valentic <todd.valentic@gmail.com>" \
+        description="Complete data transport system image"
+
+ENV INN_HOSTNAME=placeholder.com
+
+# Work around until inn-2.7.3 is available as an rpm
+COPY --chown=9:13 news/etc/inn.conf /etc/news/
+
+RUN dnf install -y epel-release hostname telnet && \
+    crb enable && \
+    dnf install -y inn python3.12 && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/microdnf
+
+# INN setup ---------------------------------------------------------------
+
+COPY --chown=news:news news/etc/ /etc/news
+COPY --chown=news:news news/lib/ /var/lib/news 
+
+EXPOSE 119 
+RUN systemctl enable innd.service
+
+# Data transport setup ----------------------------------------------------
+
+
+ARG PORT=8081 \
+    BUILD_GROUPS="" \
+    USER_NAME=transport \
+    USER_UID=1000 \
+    USER_GID=1000
+
+ENV DATA_TRANSPORT_PATH=/opt/transport \
+    PORT=${PORT} \
+    PATH="/venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_CACHE_DIR=/root/.cache/uv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_FROZEN=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    UV_PYTHON=3.12 \
+    UV_REQUIRE_HASHES=1 \
+    UV_VERIFY_HASHES=1 \
+    VIRTUAL_ENV=/venv
+
+COPY --from=ghcr.io/astral-sh/uv:0.7.13 /uv /uvx /usr/local/bin/
+
+WORKDIR $DATA_TRANSPORT_PATH/groups 
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock,z \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml,z \
+    uv venv $VIRTUAL_ENV && \
+    uv sync --no-install-project --no-editable $BUILD_GROUPS 
+
+COPY --chown=$USER_UID:$USER_GID transport $DATA_TRANSPORT_PATH 
+COPY datatransport.service /usr/lib/systemd/system/
+
+RUN groupadd --gid $USER_GID $USER_NAME && \
+    useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME && \
+    systemctl enable datatransport.service
+
