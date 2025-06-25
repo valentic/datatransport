@@ -43,9 +43,15 @@ ENV INN_HOSTNAME=placeholder.com
 # Work around until inn-2.7.3 is available as an rpm
 COPY --chown=9:13 news/etc/inn.conf /etc/news/
 
-RUN dnf install -y epel-release hostname telnet && \
+RUN dnf install -y epel-release && \
     crb enable && \
-    dnf install -y inn python3.12 && \
+    dnf install -y \
+        hostname \
+        inn \
+        python3.12 \
+        telnet \
+        vim-enhanced \
+        && \
     dnf clean all && \
     rm -rf /var/cache/dnf /var/cache/microdnf
 
@@ -99,3 +105,4 @@ RUN groupadd --gid $USER_GID $USER_NAME && \
     useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME && \
     systemctl enable datatransport.service
 
+COPY --chown=$USER_UID:$USER_GID vimrc /home/$USER_NAME/.vimrc
