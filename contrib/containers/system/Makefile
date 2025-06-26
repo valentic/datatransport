@@ -24,7 +24,7 @@ build:
 	podman build --tag $(IMAGE):$(TAG) -f Containerfile . 
 
 shell:
-	podman exec -it -u transport $(NAME) bash
+	podman exec -it -w $(DATA_TRANSPORT_PATH)/groups -u transport $(NAME) bash
 
 root-shell:
 	podman exec -it -w / -u root $(NAME) bash

@@ -38,42 +38,13 @@ LABEL   name="datatransport-system" \
         maintainer="Todd Valentic <todd.valentic@gmail.com>" \
         description="Complete data transport system image"
 
-ENV INN_HOSTNAME=placeholder.com
-
-# Work around until inn-2.7.3 is available as an rpm
-COPY --chown=9:13 news/etc/inn.conf /etc/news/
-
-RUN dnf install -y epel-release && \
-    crb enable && \
-    dnf install -y \
-        hostname \
-        inn \
-        python3.12 \
-        telnet \
-        vim-enhanced \
-        && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf /var/cache/microdnf
-
-# INN setup ---------------------------------------------------------------
-
-COPY --chown=news:news news/etc/ /etc/news
-COPY --chown=news:news news/lib/ /var/lib/news 
-
-EXPOSE 119 
-RUN systemctl enable innd.service
-
-# Data transport setup ----------------------------------------------------
-
-
-ARG PORT=8081 \
-    BUILD_GROUPS="" \
+ARG BUILD_GROUPS="" \
     USER_NAME=transport \
     USER_UID=1000 \
-    USER_GID=1000
+    USER_GID=1000 \
+    INN_HOSTNAME=news.local
 
 ENV DATA_TRANSPORT_PATH=/opt/transport \
-    PORT=${PORT} \
     PATH="/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -88,21 +59,41 @@ ENV DATA_TRANSPORT_PATH=/opt/transport \
     UV_VERIFY_HASHES=1 \
     VIRTUAL_ENV=/venv
 
+# Install OS packages ----------------------------------------------------
+
+# Work around until inn-2.7.3 is available as an rpm
+COPY --chown=9:13 config/etc/news/inn.conf /etc/news/
+
+RUN dnf install -y epel-release && \
+    crb enable && \
+    dnf install -y \
+        hostname \
+        inn \
+        python3.12 \
+        telnet \
+        vim-enhanced \
+        tmux \
+        && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf /var/cache/microdnf
+
 COPY --from=ghcr.io/astral-sh/uv:0.7.13 /uv /uvx /usr/local/bin/
 
-WORKDIR $DATA_TRANSPORT_PATH/groups 
+# Copy config and application files ---------------------------------------
+
+COPY config/ /
+COPY --chown=$USER_UID:$USER_GID transport/ $DATA_TRANSPORT_PATH
+
+RUN chown -R news:news /etc/news /var/lib/news
+
+# Install Python packages for data transport application ------------------
+
+WORKDIR $DATA_TRANSPORT_PATH
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock,z \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml,z \
     uv venv $VIRTUAL_ENV && \
-    uv sync --no-install-project --no-editable $BUILD_GROUPS 
-
-COPY --chown=$USER_UID:$USER_GID transport $DATA_TRANSPORT_PATH 
-COPY datatransport.service /usr/lib/systemd/system/
-
-RUN groupadd --gid $USER_GID $USER_NAME && \
+    uv sync --no-install-project --no-editable $BUILD_GROUPS && \
+    groupadd --gid $USER_GID $USER_NAME && \
     useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME && \
-    systemctl enable datatransport.service
-
-COPY --chown=$USER_UID:$USER_GID vimrc /home/$USER_NAME/.vimrc
+    systemctl enable datatransport.service && \
+    systemctl enable innd.service
