@@ -1,0 +1,87 @@
+##########################################################################
+#
+#   Data Transport Network Development Container 
+#
+#   This image runs a data transport application. It uses an external 
+#   container for the message store (usenet or sql).
+#
+#   2025-07-05  Todd Valentic
+#               Initial implementation
+#
+##########################################################################
+
+FROM almalinux/9-init 
+
+LABEL   name="datatransport-devel" \
+        vendor="Todd Valentic" \
+        release="2025-08" \
+        summary="Data transport application" \
+        maintainer="Todd Valentic <todd.valentic@gmail.com>" \
+        description="Data transport network development image"
+
+ARG BUILD_GROUPS="" \
+    USER_NAME=transport \
+    USER_UID=1000 \
+    USER_GID=1000 \
+    INN_HOSTNAME=news.local
+
+ENV DATA_TRANSPORT_PATH=/opt/transport \
+    PATH="/venv/bin:$PATH" \
+    PGHOST=localhost \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_FROZEN=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_MANAGED_PYTHON=1 \
+    UV_PROJECT_ENVIRONMENT=/venv \
+    UV_PYTHON=3.12 \
+    VIRTUAL_ENV=/venv
+
+# Install OS packages ----------------------------------------------------
+
+# Work around until inn-2.7.3 is available as an rpm
+COPY --chown=9:13 --chmod=644 config/news/inn.conf /etc/news/
+
+RUN dnf install -y --nodocs epel-release \
+&&  crb enable \
+&&  dnf -y module enable postgresql:16 \
+&&  dnf install -y --nodocs \
+        bash-completion \
+        hostname \
+        python3.12 \
+        telnet \
+        vim-enhanced \
+        tmux \
+        postgresql \
+        postgresql-server \
+        inn \
+&&  dnf clean all \
+&&  rm -rf /var/cache/dnf /var/cache/microdnf
+
+COPY --from=ghcr.io/astral-sh/uv:0.8.2 /uv /uvx /usr/local/bin/
+
+# Copy config and application files ---------------------------------------
+
+COPY --chown=$USER_UID:$USER_GID --chmod=644 transport/ $DATA_TRANSPORT_PATH
+RUN find $DATA_TRANSPORT_PATH -type d -exec chmod 755 {} \;
+RUN find $DATA_TRANSPORT_PATH -type f -name '*.py' -exec chmod 755 {} \;
+
+COPY --chown=news:news --chmod=644 config/news/ /etc/news
+COPY --chown=news:news --chmod=644 config/active /var/lib/news
+COPY --chmod=644 config/datatransport.service /etc/systemd/system
+COPY --chmod=644 config/tmux.conf /etc
+COPY --chmod=644 config/vimrc.local /etc
+
+# Install Python packages for data transport application ------------------
+
+WORKDIR $DATA_TRANSPORT_PATH
+
+RUN groupadd --gid $USER_GID $USER_NAME \
+&&  useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME \
+&&  uv venv $VIRTUAL_ENV \
+&&  uv sync --no-install-project --no-editable $BUILD_GROUPS \
+&&  chown -R $USER_UID:$USER_GID $VIRTUAL_ENV \
+&&  systemctl enable datatransport.service \
+&&  systemctl enable innd.service 
+

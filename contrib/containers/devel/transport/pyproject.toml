@@ -1,0 +1,9 @@
+[project]
+name = "datatransport-example"
+version = "0.1.0"
+description = "Example data transport application in a container"
+readme = "README"
+requires-python = ">=3.9"
+dependencies = [
+    "datatransport>=3.0.23",
+]

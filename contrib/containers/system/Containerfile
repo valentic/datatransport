@@ -33,7 +33,7 @@ FROM almalinux/9-init
 
 LABEL   name="datatransport-system" \
         vendor="Todd Valentic" \
-        release="2025-06" \
+        release="2025-07" \
         summary="Data transport application" \
         maintainer="Todd Valentic <todd.valentic@gmail.com>" \
         description="Complete data transport system image"
@@ -68,11 +68,12 @@ RUN dnf install -y epel-release && \
     crb enable && \
     dnf install -y \
         hostname \
-        inn \
         python3.12 \
         telnet \
         vim-enhanced \
         tmux \
+        inn \
+        postgresql \
         && \
     dnf clean all && \
     rm -rf /var/cache/dnf /var/cache/microdnf
@@ -95,5 +96,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project --no-editable $BUILD_GROUPS && \
     groupadd --gid $USER_GID $USER_NAME && \
     useradd --uid $USER_UID --gid $USER_GID --create-home --shell /bin/bash $USER_NAME && \
+    chown $USER_UID:$USER_GID -R $VIRTUAL_ENV
     systemctl enable datatransport.service && \
     systemctl enable innd.service
+

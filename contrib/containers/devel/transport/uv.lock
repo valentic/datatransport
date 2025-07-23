@@ -1,0 +1,149 @@
+version = 1
+revision = 2
+requires-python = ">=3.9"
+resolution-markers = [
+    "python_full_version >= '3.12'",
+    "python_full_version < '3.12'",
+]
+
+[[package]]
+name = "datatransport"
+version = "3.0.24"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "importlib-resources", marker = "python_full_version < '3.10'" },
+    { name = "python-dateutil" },
+    { name = "pytimeparse2" },
+    { name = "sapphire-config" },
+    { name = "standard-asyncore", marker = "python_full_version >= '3.12'" },
+    { name = "standard-nntplib", marker = "python_full_version >= '3.12'" },
+    { name = "texttable" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/6b/f5313b1dec58690a08d4a800def22a939fbb7bca306a8335cdcf56aaa519/datatransport-3.0.24.tar.gz", hash = "sha256:4b2e66170d134a7bc8c15abf99db62cd84e69edea936f9f401c042cf66a8cd4b", size = 176961, upload-time = "2025-06-16T20:42:10.181Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/ed/337ee9b21a157ee1b850b34fe7effdb850c53f382835c1c877a6d9d2430c/datatransport-3.0.24-py3-none-any.whl", hash = "sha256:0d46962269a0a072c979d57aaede3a3df8afbaa5056ec9c95d0bf368cb524476", size = 154119, upload-time = "2025-06-16T20:42:08.45Z" },
+]
+
+[[package]]
+name = "datatransport-example"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "datatransport" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "datatransport", specifier = ">=3.0.23" }]
+
+[[package]]
+name = "humanfriendly"
+version = "10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyreadline3", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cc/3f/2c29224acb2e2df4d2046e4c73ee2662023c58ff5b113c4c1adac0886c43/humanfriendly-10.0.tar.gz", hash = "sha256:6b0b831ce8f15f7300721aa49829fc4e83921a9a301cc7f606be6686a2288ddc", size = 360702, upload-time = "2021-09-17T21:40:43.31Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f0/0f/310fb31e39e2d734ccaa2c0fb981ee41f7bd5056ce9bc29b2248bd569169/humanfriendly-10.0-py2.py3-none-any.whl", hash = "sha256:1697e1a8a8f550fd43c2865cd84542fc175a61dcb779b6fee18cf6b6ccba1477", size = 86794, upload-time = "2021-09-17T21:40:39.897Z" },
+]
+
+[[package]]
+name = "importlib-resources"
+version = "6.5.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "zipp", marker = "python_full_version < '3.10'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/8c/f834fbf984f691b4f7ff60f50b514cc3de5cc08abfc3295564dd89c5e2e7/importlib_resources-6.5.2.tar.gz", hash = "sha256:185f87adef5bcc288449d98fb4fba07cea78bc036455dd44c5fc4a2fe78fed2c", size = 44693, upload-time = "2025-01-03T18:51:56.698Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/ed/1f1afb2e9e7f38a545d628f864d562a5ae64fe6f7a10e28ffb9b185b4e89/importlib_resources-6.5.2-py3-none-any.whl", hash = "sha256:789cfdc3ed28c78b67a06acb8126751ced69a3d5f79c095a98298cd8a760ccec", size = 37461, upload-time = "2025-01-03T18:51:54.306Z" },
+]
+
+[[package]]
+name = "pyreadline3"
+version = "3.5.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/49/4cea918a08f02817aabae639e3d0ac046fef9f9180518a3ad394e22da148/pyreadline3-3.5.4.tar.gz", hash = "sha256:8d57d53039a1c75adba8e50dd3d992b28143480816187ea5efbd5c78e6c885b7", size = 99839, upload-time = "2024-09-19T02:40:10.062Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/dc/491b7661614ab97483abf2056be1deee4dc2490ecbf7bff9ab5cdbac86e1/pyreadline3-3.5.4-py3-none-any.whl", hash = "sha256:eaf8e6cc3c49bcccf145fc6067ba8643d1df34d604a1ec0eccbf7a18e6d3fae6", size = 83178, upload-time = "2024-09-19T02:40:08.598Z" },
+]
+
+[[package]]
+name = "python-dateutil"
+version = "2.9.0.post0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/66/c0/0c8b6ad9f17a802ee498c46e004a0eb49bc148f2fd230864601a86dcf6db/python-dateutil-2.9.0.post0.tar.gz", hash = "sha256:37dd54208da7e1cd875388217d5e00ebd4179249f90fb72437e91a35459a0ad3", size = 342432, upload-time = "2024-03-01T18:36:20.211Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl", hash = "sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427", size = 229892, upload-time = "2024-03-01T18:36:18.57Z" },
+]
+
+[[package]]
+name = "pytimeparse2"
+version = "1.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/19/10/cc63fecd69905eb4d300fe71bd580e4a631483e9f53fdcb8c0ad345ce832/pytimeparse2-1.7.1.tar.gz", hash = "sha256:98668cdcba4890e1789e432e8ea0059ccf72402f13f5d52be15bdfaeb3a8b253", size = 10431, upload-time = "2023-05-11T21:40:55.774Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/9e/85abf91ef5df452f56498927affdb7128194d15644084f6c6722477c305b/pytimeparse2-1.7.1-py3-none-any.whl", hash = "sha256:a162ea6a7707fd0bb82dd99556efb783935f51885c8bdced0fce3fffe85ab002", size = 6136, upload-time = "2023-05-11T21:40:46.051Z" },
+]
+
+[[package]]
+name = "sapphire-config"
+version = "1.0.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "humanfriendly" },
+    { name = "python-dateutil" },
+    { name = "pytimeparse2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0e/29/52b6f494864d5cea24b80d17ab6b72d54ee4a3b245dd6009c562c462f376/sapphire_config-1.0.4.tar.gz", hash = "sha256:805828455f18b8412fff909d9787dbab9e29606ce9f2407e8589d7b236497650", size = 30920, upload-time = "2023-07-27T23:38:15.072Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/10/cc71f1a2d44c75b33a1bbb0d7a02acce4300624bc81259212f27cfeb9deb/sapphire_config-1.0.4-py3-none-any.whl", hash = "sha256:b3af1ea3118df3bad7b92c3b28c27f64346df97a5a0db95501d4c0f0360341db", size = 8045, upload-time = "2023-07-27T23:38:13.576Z" },
+]
+
+[[package]]
+name = "six"
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "standard-asyncore"
+version = "3.13.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/2d/e9077e440aed1366d1bd6dfd052f59d92d448cfd33534146285db507eaea/standard_asyncore-3.13.0.tar.gz", hash = "sha256:03f25918feaaa3ec13e5684c5289e80682bb584effc97c6d0ecd1e2f45bd0d7d", size = 14329, upload-time = "2024-10-30T16:01:33.189Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/0d/66b56f2ae56c6fdb4ff935c48a7bc42a6b0799e6e0842f1f824084cbcd28/standard_asyncore-3.13.0-py3-none-any.whl", hash = "sha256:de5743678b5331d56bbb3bb80a09e2aa49f7779ce3867072ddd79485ff765dca", size = 9245, upload-time = "2024-10-30T16:01:09.529Z" },
+]
+
+[[package]]
+name = "standard-nntplib"
+version = "3.13.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/9e/07b87ac6871581901bc695c61728e59f2d0191799501243be3ed96ae33d4/standard_nntplib-3.13.0.tar.gz", hash = "sha256:27d7f9853bf2f1a67111478d919fba297f9a4fb2b6785fbdea4d9f1cef967680", size = 28129, upload-time = "2024-10-30T16:01:38.736Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/76/b015bdbd2598632ddd036b18275f9412c365ccf1a3b470a06a2d77439a03/standard_nntplib-3.13.0-py3-none-any.whl", hash = "sha256:8317d862f95c38ad9743e62628a184fb476ebc21ff1c9c2191e114278da0e74f", size = 14578, upload-time = "2024-10-30T16:01:19.419Z" },
+]
+
+[[package]]
+name = "texttable"
+version = "1.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1c/dc/0aff23d6036a4d3bf4f1d8c8204c5c79c4437e25e0ae94ffe4bbb55ee3c2/texttable-1.7.0.tar.gz", hash = "sha256:2d2068fb55115807d3ac77a4ca68fa48803e84ebb0ee2340f858107a36522638", size = 12831, upload-time = "2023-10-03T09:48:12.272Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/24/99/4772b8e00a136f3e01236de33b0efda31ee7077203ba5967fcc76da94d65/texttable-1.7.0-py2.py3-none-any.whl", hash = "sha256:72227d592c82b3d7f672731ae73e4d1f88cd8e2ef5b075a7a7f01a23a3743917", size = 10768, upload-time = "2023-10-03T09:48:10.434Z" },
+]
+
+[[package]]
+name = "zipp"
+version = "3.23.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/02/0f2892c661036d50ede074e376733dca2ae7c6eb617489437771209d4180/zipp-3.23.0.tar.gz", hash = "sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166", size = 25547, upload-time = "2025-06-08T17:06:39.4Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl", hash = "sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e", size = 10276, upload-time = "2025-06-08T17:06:38.034Z" },
+]
