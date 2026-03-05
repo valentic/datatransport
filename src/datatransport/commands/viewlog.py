@@ -48,6 +48,12 @@
 #   2023-08-11  Todd Valentic
 #               Show more lines at start to better catch trace backs
 #
+#   2026-02-26  Todd Valentic
+#               Fix recursive file find. Need to use full_match instead 
+#                   of match, which doesn't support the recusive wildcard
+#
+#               Add -V / --version option
+#
 ##########################################################################
 
 import argparse
@@ -60,6 +66,7 @@ from pathlib import Path
 
 from datatransport import TransportConfig
 
+VERSION = "3.0.1"
 
 class FileTracker:
     """Track view for a given file"""
@@ -191,9 +198,9 @@ class Tail:
                     watch.update(logfiles)
                 continue
             if self.args.recursive:
-                watch.update([p for p in logfiles if p.match(f"{group}/**/*.log")])
-            watch.update([p for p in logfiles if p.match(f"{group}/*.log")])
-            watch.update([p for p in logfiles if p.match(f"{group}.log")])
+                watch.update([p for p in logfiles if p.full_match(f"{group}/**/*.log")])
+            watch.update([p for p in logfiles if p.full_match(f"{group}/*.log")])
+            watch.update([p for p in logfiles if p.full_match(f"{group}.log")])
 
         return watch
 
@@ -285,6 +292,7 @@ def main():
         help="Show parent log files",
     )
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("-V", "--version", action="version", version=VERSION)
 
     args = parser.parse_args()
 
