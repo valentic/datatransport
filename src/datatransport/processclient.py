@@ -169,6 +169,9 @@
 #               Do not map getters from config, use config object               
 #               current_time() renamed to now()
 #
+#   2026-03-05  Todd Valentic
+#               Expand user in PATH components
+#
 ###########################################################################
 
 import atexit
@@ -354,9 +357,11 @@ class ProcessClient(Root):
 
         self.log.debug("Setting environment variables:")
 
-        os.environ["PATH"] = self.config.get("path.exec", "/usr/local/bin:/bin:/usr/bin")
-        os.environ["PATH"] += ":" + self.config.get("group.bin")
-        os.environ["PATH"] += ":" + self.config.get("path.bin")
+        paths = self.config.get("path.exec", "/usr/local/bin:/bin:/usr/bin")
+        paths += ":" + self.config.get("group.bin")
+        paths += ":" + self.config.get("path.bin")
+
+        os.environ["PATH"] = paths 
 
         options = self.config.options()
 
@@ -379,6 +384,10 @@ class ProcessClient(Root):
             else:
                 os.environ[var] = value
             self.log.debug("  add: [%s] %s", var, value)
+
+        paths = os.environ["PATH"].split(":")
+        expanded_path = [os.path.expanduser(p) for p in paths]
+        os.environ["PATH"] = ":".join(expanded_path)
 
         keys = sorted(os.environ.keys())
 

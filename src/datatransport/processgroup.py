@@ -56,6 +56,9 @@
 #   2023-08-14  Todd Valentic
 #               Make sure group.home in PYTHONPATH
 #
+#   2026-03-03  Todd Valentic
+#               Expand user in PATH components
+#
 #############################################################################
 
 import configparser
@@ -203,6 +206,9 @@ class ProcessGroup:
             else:
                 self.environ[var] = value
             self.log.debug("  add: %s=%s", var, self.environ[var])
+
+        paths = [os.path.expanduser(p) for p in environ["PATH"].split(":")]
+        os.environ["PATH"] = ":".join(paths)
 
         if 'PYTHONPATH' in os.environ:
             pythonpath = os.environ['PYTHONPATH'].split(':')
