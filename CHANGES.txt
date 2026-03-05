@@ -1,3 +1,9 @@
+2026-03-03  Todd Valentic
+    - viewlog - fix recursive log file search
+    - Expand user (~) in PATH read from config files
+    - Only set PYTHONPATH in temporary environ for processgroup
+    - Release 3.0.26
+
 2025-06-23  Todd Valentic
     - Add contrib/containers
 

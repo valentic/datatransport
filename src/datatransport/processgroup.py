@@ -58,6 +58,7 @@
 #
 #   2026-03-03  Todd Valentic
 #               Expand user in PATH components
+#               Fix - PYTHONPATH expanded in os not self
 #
 #############################################################################
 
@@ -207,11 +208,11 @@ class ProcessGroup:
                 self.environ[var] = value
             self.log.debug("  add: %s=%s", var, self.environ[var])
 
-        paths = [os.path.expanduser(p) for p in environ["PATH"].split(":")]
-        os.environ["PATH"] = ":".join(paths)
+        paths = [os.path.expanduser(p) for p in self.environ["PATH"].split(":")]
+        self.environ["PATH"] = ":".join(paths)
 
-        if 'PYTHONPATH' in os.environ:
-            pythonpath = os.environ['PYTHONPATH'].split(':')
+        if 'PYTHONPATH' in self.environ:
+            pythonpath = self.environ['PYTHONPATH'].split(':')
         else:
             pythonpath = []
 
@@ -219,7 +220,7 @@ class ProcessGroup:
 
         if grouphome not in pythonpath:
             pythonpath.append(grouphome)
-            os.environ['PYTHONPATH'] = ':'.join(pythonpath)
+            self.environ['PYTHONPATH'] = ':'.join(pythonpath)
 
         for key, value in self.environ.items():
             self.log.debug("  %s = %s", key, value)
