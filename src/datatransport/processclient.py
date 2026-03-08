@@ -172,6 +172,9 @@
 #   2026-03-05  Todd Valentic
 #               Expand user in PATH components
 #
+#   2023-03-08  Todd Valentic
+#               Use transportlogger to setup the logger.
+#
 ###########################################################################
 
 import atexit
@@ -194,6 +197,7 @@ import sapphire_config as sapphire
 
 from . import Root
 from . import TransportConfig
+from . import transportlogger
 
 # For the get methods forwarded to the config
 # pylint: disable=no-member
@@ -264,64 +268,12 @@ class ProcessClient(Root):
                 if proc.poll() is None:
                     proc.send_signal(signum)
 
-    def _setup_log_socket_handler(self, formatter):
-        """Add a socket log handler"""
-
-        host = self.config.get("log.socket.host", fallback="localhost")
-        port = self.config.get_int("log.socket.port", fallback=9020)
-
-        socket_handler = SocketHandler(host, port)
-        socket_handler.setFormatter(formatter)
-
-        return socket_handler
-
-    def _setup_log_file_handler(self, formatter):
-        """Add a rotating file log handler"""
-
-        filename = self.config.get("log.file")
-        maxbytes = self.config.get_bytes("log.maxbytes", fallback="100kb")
-        backup_count = self.config.get_int("log.backupcount", fallback=3)
-
-        rotating_handler = RotatingFileHandler(filename, "a", maxbytes, backup_count)
-        rotating_handler.setFormatter(formatter)
-
-        return rotating_handler
-
-    def setup_log_formatter(self):
-        """Initialize a log formatter"""
-
-        msgfmt = "[%(asctime)s.%(msecs)03d %(levelname)7s] %(name)s"
-
-        if self.config.get_boolean("log.showthread", fallback=False):
-            msgfmt += " [%(threadName)s]"
-
-        msgfmt = msgfmt + ": %(message)s"
-
-        datefmt = "%Y-%m-%d %H:%M:%S"
-
-        return logging.Formatter(msgfmt, datefmt)
-
     def setup_log(self):
         """Setup log handlers"""
 
-        level = self.config.get("log.level", "info")
-        formatter = self.setup_log_formatter()
-
-        root_logger = logging.getLogger("")
-        self.log = logging.getLogger(f"{self.groupname}/{self.name}")
-
-        if self.config.get_boolean("log.file.enable", True):
-            root_logger.addHandler(self._setup_log_file_handler(formatter))
-
-        if self.config.get_boolean("log.socket.enable", True):
-            root_logger.addHandler(self._setup_log_socket_handler(formatter))
-
-        if level == "warning":
-            root_logger.setLevel(logging.WARNING)
-        elif level == "info":
-            root_logger.setLevel(logging.INFO)
-        else:
-            root_logger.setLevel(logging.DEBUG)
+        self.log = transportlogger.create(
+            self.config, f"{self.groupname}/{self.name}"
+        )
 
     def load_config(self):
         """Load the configuration files"""

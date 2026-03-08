@@ -46,12 +46,12 @@
 #
 #   2023-07-09  Todd Valentic
 #               Use TransportConfig find_config_files()
-#               Use place holde {client.name} when showing config in debug 
+#               Use place holde {client.name} when showing config in debug
 #
 #   2023-07-20  Todd Valentic
 #               Change error to debug if no clients listed
 #               Reduce default shutdown_timeout to 30s
-#               Change shutdown_timeout to timedelta 
+#               Change shutdown_timeout to timedelta
 #
 #   2023-08-14  Todd Valentic
 #               Make sure group.home in PYTHONPATH
@@ -59,6 +59,11 @@
 #   2026-03-03  Todd Valentic
 #               Expand user in PATH components
 #               Fix - PYTHONPATH expanded in os not self
+#
+#   2026-03-07  Todd Valentic
+#               Improve startup/shutdown messaging
+#               Remove log handlers when object is deleted
+#               Close handlers when removed
 #
 #############################################################################
 
@@ -72,7 +77,7 @@ import sys
 import time
 
 from . import TransportConfig
-from .transportlogger import create_transport_logger
+from . import transportlogger 
 
 
 class ClientInfo:
@@ -132,13 +137,33 @@ class ProcessGroup:
         self.shutdown_timeout = None
         self.report_rate = None
 
-        self.reload()
+        self.reload(first_time=True)
 
-    def reload(self):
+        # self.log.info(f"{' RUNNING ':-^30}")
+
+    def __del__(self):
+
+        self.log.info(f"{' STOPPED ':-^30}")
+
+        for handler in list(self.log.handlers):
+            handler.close()
+            self.log.removeHandler(handler)
+
+    def reload(self, first_time=False):
         """Reload configuration files"""
 
         config_files = self.load_config()
-        self.setup_log()
+
+        self.log = transportlogger.create(
+            self.config["ProcessGroup"], self.name, standalone=True
+        )
+
+        if first_time:
+            self.log.info(f"{' STARTING ':-^30}")
+
+        level = self.log.getEffectiveLevel()
+        self.log.debug("Setting log level to %s", logging.getLevelName(level))
+
         self.setup_environ()
         self.load_clients()
 
@@ -211,8 +236,8 @@ class ProcessGroup:
         paths = [os.path.expanduser(p) for p in self.environ["PATH"].split(":")]
         self.environ["PATH"] = ":".join(paths)
 
-        if 'PYTHONPATH' in self.environ:
-            pythonpath = self.environ['PYTHONPATH'].split(':')
+        if "PYTHONPATH" in self.environ:
+            pythonpath = self.environ["PYTHONPATH"].split(":")
         else:
             pythonpath = []
 
@@ -220,27 +245,10 @@ class ProcessGroup:
 
         if grouphome not in pythonpath:
             pythonpath.append(grouphome)
-            self.environ['PYTHONPATH'] = ':'.join(pythonpath)
+            self.environ["PYTHONPATH"] = ":".join(pythonpath)
 
         for key, value in self.environ.items():
             self.log.debug("  %s = %s", key, value)
-
-    def setup_log(self):
-        """Setup logging"""
-
-        if not self.log:
-            self.log = create_transport_logger(self.config["ProcessGroup"], self.name)
-            self.log.info("---------- START ----------")
-
-        level = self.config["ProcessGroup"].get("log.level", "info")
-        self.log.info("Setting log level to %s", level)
-
-        if level == "warning":
-            self.log.setLevel(logging.WARNING)
-        elif level == "info":
-            self.log.setLevel(logging.INFO)
-        else:
-            self.log.setLevel(logging.DEBUG)
 
     def load_config(self):
         """Load configuration"""
@@ -255,7 +263,7 @@ class ProcessGroup:
         self.config = TransportConfig(defaults)
         basepath = self.config["TransportServer"].get_path("path.groups")
         hostname = self.config["TransportServer"].get("hostname")
-        config_files = self.config.find_config_files(self.name, basepath, hostname) 
+        config_files = self.config.find_config_files(self.name, basepath, hostname)
 
         for filename in config_files:
             self.config.read(filename)

@@ -49,6 +49,10 @@
 #               Python3: socketserver
 #               Use new get_* methods
 #
+#   2026-03-07  Todd Valentic
+#               Improve start/stop messages
+#               Remove groups on shutdown
+#
 ##########################################################################
 
 import os
@@ -59,7 +63,7 @@ from threading import Thread
 from socketserver import ThreadingMixIn
 from xmlrpc.server import SimpleXMLRPCServer
 
-from .transportlogger import create_transport_logger
+from . import transportlogger 
 from . import ProcessGroup
 from . import TransportConfig
 
@@ -74,7 +78,7 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
         self.daemon = True
 
         self.config = TransportConfig()["TransportServer"]
-        self.log = create_transport_logger(self.config, "TransportServer")
+        self.log = transportlogger.create(self.config, "TransportServer")
         self.autostart = self.config.get_boolean("autostart", False)
 
         port = self.config.get_int("port", 8081)
@@ -93,7 +97,7 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
         self.groups = {}
         self.pidlist = {}
 
-        self.log.info("---------- START ----------")
+        self.log.info(f"{' STARTING ':-^40}")
 
         self.loadgroups()
 
@@ -235,8 +239,8 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
             return False
 
         try:
-            self.groups[name] = ProcessGroup(name, self.queue, self.log)
             self.log.info("Adding %s", name)
+            self.groups[name] = ProcessGroup(name, self.queue, self.log)
         except BaseException:  # pylint: disable=broad-except
             self.log.exception("Problem loading %s", name)
             return False
@@ -334,7 +338,8 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
     def stop(self):
         """Stop the server"""
 
-        self.stopgroups(self.groups.keys())
+        self.stopgroups(list(self.groups))
+        self.groups = None
         self.running = False
         return True
 
@@ -342,7 +347,7 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
         """Indicate we are alive"""
 
         pid = os.getpid()
-        proc = pathlib.Path('/proc', str(pid), 'fd')
+        proc = pathlib.Path("/proc", str(pid), "fd")
         numfiles = len(list(proc.iterdir()))
         numclients = sum(len(g.clients) for g in self.groups.values())
         numrunning = 0
@@ -352,7 +357,7 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
                 if client.pid:
                     numrunning += 1
 
-        statm = pathlib.Path('/proc', str(pid), 'statm')
+        statm = pathlib.Path("/proc", str(pid), "statm")
         vmrss = int(statm.read_text("UTF-8").split()[1])
         memusage = vmrss * resource.getpagesize()
 
@@ -378,4 +383,4 @@ class TransportServer(Thread, ThreadingMixIn, SimpleXMLRPCServer):
         finally:
             self.server_close()
 
-        self.log.info("========== STOP  ==========")
+        self.log.info(f"{' SHUTDOWN ':=^40}")

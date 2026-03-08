@@ -10,7 +10,12 @@
 #               Use get_* methods
 #
 #   2023-08-17  Todd Valentic
-#               Clear handlers when creating 
+#               Clear handlers when creating
+#
+#   2026-03-07  Todd Valentic
+#               Set handlers on root logger unless standalone. This 
+#                   will let loggers in libraries to still log to 
+#                   the right formatter/handler through propogation.
 #
 ##########################################################################
 
@@ -50,24 +55,37 @@ def _setup_log_file_handler(config, formatter):
     return rotating_handler
 
 
-def _setup_log_formatter():
+def _setup_log_formatter(config):
     """Initialize a log formatter"""
 
-    msgfmt = "[%(asctime)s.%(msecs)03d %(levelname)7s] %(name)s: %(message)s"
+    msgfmt = "[%(asctime)s.%(msecs)03d %(levelname)7s] %(name)s: " 
+
+    if config.get_boolean("log.showthread", False):
+        msgfmt += "[%(threadName)s]"
+
+    msgfmt += "%(message)s"
+
     datefmt = "%Y-%m-%d %H:%M:%S"
 
     return logging.Formatter(msgfmt, datefmt)
 
 
-def create_transport_logger(config, name):
+#def create_transport_logger(config, name, standalone=False):
+def create(config, name, standalone=False):
     """Create a logger for data transport processes"""
 
     level = config.get("log.level", "info")
-    formatter = _setup_log_formatter()
+    formatter = _setup_log_formatter(config)
 
-    logger = logging.getLogger(name)
+    if standalone:
+        logger = logging.getLogger(name)
+        logger.propagate = False
+    else:
+        logger = logging.getLogger()
 
-    logger.handlers.clear()
+    for handler in list(logger.handlers):
+        handler.close()
+        logger.removeHandler(handler)
 
     if config.get_boolean("log.file.enable", True):
         logger.addHandler(_setup_log_file_handler(config, formatter))
@@ -84,4 +102,4 @@ def create_transport_logger(config, name):
     elif level == "debug":
         logger.setLevel(logging.DEBUG)
 
-    return logger
+    return logger if standalone else logging.getLogger(name)
