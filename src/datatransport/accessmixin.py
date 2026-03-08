@@ -27,6 +27,9 @@
 #               Updated for transport3 / python3
 #               Use Root for base class 
 #
+#   2026-03-07  Todd Valentic
+#               Remove self.utc, use datetime.UTC instead
+#
 #   SPDX-License-Identifier: GPL-3.0-or-later
 #   Copyright (C) 1999-2022 Todd Valentic
 #
@@ -50,6 +53,5 @@ class AccessMixin(Root):
         self.stop = parent.stop
         self.wait = parent.wait
         self.now = parent.now
-        self.utc = parent.utc
         self.is_running = parent.is_running
         self.is_stopped = parent.is_stopped

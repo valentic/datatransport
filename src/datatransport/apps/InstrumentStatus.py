@@ -159,6 +159,9 @@
 #                   StringIO -> io.StringIO
 #                   NewsPoster
 #
+#   2026-03-07  Todd VAlentic
+#               Use datetime.UTC
+#
 ##############################################################################
 
 import datetime
@@ -291,7 +294,7 @@ class Instrument(ConfigComponent):
         try:
             return parser.parse(config.get(self.name, key))
         except:
-            return datetime.datetime.now(datetime.timezone.utc)
+            return datetime.datetime.now(datetime.UTC)
 
     def loaddeltatime(self, config, key):
 
@@ -418,7 +421,7 @@ class Instrument(ConfigComponent):
             date = parser.parse(date)
             server.quit()
         except:
-            date = datetime.datetime.now(datetime.timezone.utc)
+            date = datetime.datetime.now(datetime.UTC)
             self.log.exception("Problem determining message time")
 
         return date

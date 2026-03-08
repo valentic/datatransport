@@ -357,6 +357,9 @@
 #               Add ability to set path for NewsPoller last read file
 #               Create last read file path if necessary
 #
+#   2026-03-07  Todd Vaelntic
+#               Use datetime.UTC
+#
 ###########################################################################
 
 import collections
@@ -379,8 +382,6 @@ from fnmatch import fnmatch
 from dateutil import parser
 from datatransport.utilities import datefunc, make_path
 import sapphire_config as sapphire
-
-utc = datetime.timezone.utc
 
 ###### Exception Class ###################################################
 
@@ -472,10 +473,10 @@ def message_date(message):
         if header in message:
             timestamp = dateparser.parse(message[header])
             if timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=utc)
+                timestamp = timestamp.replace(tzinfo=datetime.UTC)
             return timestamp
 
-    return datetime.datetime.now(utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 def as_config(message):
@@ -569,7 +570,7 @@ class NewsTool:
         response = server.date()
         datestr = response[0].split()[1]  # 111 YYYYMMDDhhmmss
 
-        return datefunc.strptime(datestr, "%Y%m%d%H%M%S", tzinfo=utc)
+        return datefunc.strptime(datestr, "%Y%m%d%H%M%S", tzinfo=datetime.UTC)
 
     def list_articles(self, offset, newsgroups=None):
         """

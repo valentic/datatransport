@@ -26,6 +26,9 @@
 #   2023-07-27  Todd Valentic
 #               Updated for transport3 / python3
 #
+#   2026-03-07  Todd Valentic
+#               Use datetime.UTC 
+#
 ##########################################################################
 
 import os
@@ -35,8 +38,6 @@ from dateutil import parser
 
 from datatransport import ConfigComponent
 import sapphire_config as sapphire
-
-utc = datetime.timezone.utc
 
 
 class State(ConfigComponent):
@@ -74,7 +75,7 @@ class State(ConfigComponent):
     def get_datetime(self, config, section, key):
         try:
             timestr = config.get(section, key)
-            return parser.parse(timestr).replace(tzinfo=utc)
+            return parser.parse(timestr).replace(tzinfo=datetime.UTC)
         except:
             return None
 
@@ -176,7 +177,7 @@ class EventMonitor:
     def save(self, filename, timestamp=None):
 
         if timestamp is None:
-            timestamp = datetime.datetime.now(utc)
+            timestamp = datetime.datetime.now(datetime.UTC)
 
         data = sapphire.Parser()
         data.set("DEFAULT", "timestamp", str(timestamp))

@@ -354,6 +354,9 @@
 #   2023-07-26  Todd Valentic
 #               Updated for transport3 / python3
 #
+#   2026-03-07  Todd Valentic
+#               Use datetime.UTC
+#
 ##############################################################################
 
 import email
@@ -368,7 +371,7 @@ import sys
 import subprocess
 import traceback
 
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import md5
 from pathlib import Path
 
@@ -385,7 +388,7 @@ from datatransport.utilities import make_path
 
 def now():
     """Return current time"""
-    return datetime.now(timezone.utc)
+    return datetime.now(datetime.UTC)
 
 
 class Checkpoint:
@@ -690,7 +693,7 @@ class ArchiveGroups(ProcessClient):
         if self.start_time:
             try:
                 self.start_time = datefunc.strptime(
-                    self.start_time, self.time_fmt, timezone.utc
+                    self.start_time, self.time_fmt, datetime.UTC 
                 )
                 self.log.info("Only processing messages past %s", self.start_time)
             except:
@@ -702,7 +705,7 @@ class ArchiveGroups(ProcessClient):
         if self.stop_time:
             try:
                 self.stop_time = datefunc.strptime(
-                    self.stop_time, self.time_fmt, timezone.utc
+                    self.stop_time, self.time_fmt, datetime.UTC 
                 )
                 self.log.info("Only processing messages before  %s", self.stop_time)
             except:
@@ -1386,7 +1389,7 @@ class ArchiveGroups(ProcessClient):
             offset = self.summary_offset.total_seconds()
 
             next_time = (math.floor(secs / interval) + 1) * interval + offset
-            next_time = datetime.fromtimestamp(next_time, tz=timezone.utc)
+            next_time = datetime.fromtimestamp(next_time, tz=datetime.UTC)
 
             self.log.debug("    - interval = %s", self.summary_period)
             self.log.debug("    - offset   = %s", self.summary_offset)

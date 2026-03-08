@@ -174,6 +174,7 @@
 #
 #   2023-03-08  Todd Valentic
 #               Use transportlogger to setup the logger.
+#               Remove self.utc - use datetime.UTC instead
 #
 ###########################################################################
 
@@ -209,7 +210,6 @@ class ProcessClient(Root):
     def __init__(self, argv):
         self.groupname = argv[1]
         self.name = argv[2]
-        self.utc = datetime.timezone.utc
         self.subprocs = set()
         self.started_rates = {}
         self.exit_event = threading.Event()
@@ -384,7 +384,7 @@ class ProcessClient(Root):
 
     def now(self):
         """Return current time as datetime with UTC timezone"""
-        return datetime.datetime.now(self.utc)
+        return datetime.datetime.now(datetime.UTC)
 
     def wait(self, pollrate, offset=None, sync=False):
         """Wait for a given time, short circuit if we have stopped running"""
