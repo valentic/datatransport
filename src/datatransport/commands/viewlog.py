@@ -1,299 +1,551 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Data Transport log viewer"""
 
 ##########################################################################
 #
-#   ViewLog
+#   Viewlog
 #
-#   This program displays either the server or a process group's log file
-#   in a manner like "tail -F".
-#
-#   1.0.0   2000-??-??  Todd Valentic
-#           Original implementation.
-#
-#   1.0.1   2002-08-26  Todd Valentic
-#           Modified to be setup via configure script.
-#
-#   2.0.0   2005-01-07  Todd Valentic
-#           Completely rewritten and no longer depends on the
-#               system's tail command. Checks are made for
-#               new files periodically to handle rotating log
-#               files.
-#
-#   2.0.1   2005-04-07  Todd Valentic
-#           Sort lines at start to order by time.
-#
-#   2.0.2   2005-11-08  Todd Valentic
-#           Added key parameter to line sorting so we only sort
-#               on the date.
-#
-#   2.0.3   2007-04-14  Todd Valentic
-#           Only print log entry lines (those starting with "[")
-#               at start to avoid printing part of an traceback.
-#
-#   2016-12-23  Todd Valentic
-#               Use datatransport package format
-#               Use print()
-#
-#   2022-10-06  Todd Valentic
-#               Move into datatransport/commands
-#               Convert from optparse -> argparse
-#
-#   2023-07-07  Todd Valentic
-#               Updated for transport3 / python3
-#               Add recursive and parent options
-#               Handle mulitple groups/clients
-#               Make sure output is always time ordered
-#
-#   2023-08-11  Todd Valentic
-#               Show more lines at start to better catch trace backs
-#
-#   2026-02-26  Todd Valentic
-#               Fix recursive file find. Need to use full_match instead 
-#                   of match, which doesn't support the recusive wildcard
-#
-#               Add -V / --version option
+#   2026-03-07  Todd Valentic
+#               Complete reimplementation using the watchdog package.
+#               Handle both test and JSON formatted logs.
+#               Try to remain compatible with original.
+#               Release 3.2.0
 #
 ##########################################################################
 
 import argparse
-import os
-import signal
-import sys
+import heapq
+import logging
 import time
+import json
+import os
+import re
+import sys
+import threading
 
-from pathlib import Path
-
+from collections import namedtuple
 from datatransport import TransportConfig
+from datetime import datetime
+from functools import total_ordering, cached_property
+from pathlib import Path, PurePosixPath
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-VERSION = "3.0.1"
+from rich import print
+from rich.console import Console
+from rich.text import Text
+from rich.panel import Panel
 
-class FileTracker:
-    """Track view for a given file"""
+VERSION = "3.2.1"
 
-    def __init__(self, name):
-        self.name = name
-        self.file = None
-        self.size = 0
-        self.inode = 0
-        self.dev = 0
-        self.firsttime = True
+console = Console()
 
-        self.n_unchanged_stats = 0
-        self.n_consecutive_size_changes = 0
+# -------------------------------------------------------------------------
+# utilitlies 
+# -------------------------------------------------------------------------
 
-        self.reopen()
+class dotdict(dict):
+    """dot.notation access to dictionary attributes"""
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
 
-    def reopen(self):
-        """Reopen the file in case it closes (i.e.log rotation)"""
+# -------------------------------------------------------------------------
+# parse block of text into records starting with [(asctime) (levelname)]
+# -------------------------------------------------------------------------
 
-        try:
-            # pylint: disable=consider-using-with
-            stream = open(self.name, "r", encoding="utf-8")
-            stats = os.stat(self.name)
-        except:  # pylint: disable=bare-except
-            self.file = None
-            self.inode = 0
-            self.dev = 0
+text_parser = re.compile(
+    r"""
+    ^\[
+        (?P<asctime>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)
+        \s+
+        (?P<levelname>[A-Z]+)
+    \]
+    \s+
+    (?P<name>[^:]+)
+    :
+    \s*?
+    (?P<full_message>
+        [^\n]*                 # first message line
+        (?:\n(?!\[\d{4}-\d{2}-\d{2})[^\n]*)*   # continuation lines
+    )
+    """,
+    re.MULTILINE | re.VERBOSE,
+)
+
+# -------------------------------------------------------------------------
+# multi pattern filter
+#
+#   exclude patterns starting with !
+#   * = one level
+#   ** = any depth
+#   automatic leaf filtering
+# -------------------------------------------------------------------------
+
+
+class FilterManager:
+    def __init__(self, patterns):
+        self.rules = self.compile_patterns(patterns)
+        self.include_names = set()
+        self.exclude_names = set()
+
+    def compile_patterns(self, patterns):
+        rules = []
+
+        for pat in patterns:
+            include = True
+            if pat.startswith("!"):
+                include = False
+                pat = pat[1:]
+
+            pat = re.escape(pat)
+            pat = pat.replace(r"\*\*", ".*")
+            pat = pat.replace(r"\*", "[^/]+")
+
+            regex = re.compile(rf"^{pat}$")
+            rules.append((include, regex))
+
+        return rules
+
+    def check_name(self, name, leaf_only=True):
+        path = PurePosixPath(name)
+
+        s = str(path)
+        keep = False
+
+        for include, regex in self.rules:
+            if regex.match(s):
+                keep = include
+                break
+
+        if not keep:
+            self.exclude_names.add(s)
+            return False
+
+        if leaf_only and path == path.parent:
+            self.exclude_names.add(s)
+            return False
+
+        self.include_names.add(s)
+
+        return True
+
+    def match(self, name):
+
+        if name in self.include_names:
+            return True
+
+        if name in self.exclude_names:
+            return False
+
+        return self.check_name(name)
+
+
+# -------------------------------------------------------------------------
+# merge queue
+# -------------------------------------------------------------------------
+
+
+@total_ordering
+class RecordKey:
+    def __init__(self, record):
+        self.record = record
+
+    @cached_property
+    def key(self):
+        return self.record["asctime"].replace(",", ".")
+
+    @cached_property
+    def ts(self):
+        return datetime.strptime(self.key, "%Y-%m-%d %H:%M:%S.%f")
+
+    def __lt__(self, other):
+        return self.key < other.key
+
+    def __eq__(self, other):
+        return self.key == other.key
+
+    def __repr(self):
+        return f"{__class__.__name__}(record={self.record})"
+
+
+class RecordQueue:
+    def __init__(self, filters, level="notset", limit=None):
+        self.filters = filters
+        self.heap = []
+        self.limit = limit  
+        self.lock = threading.Lock()
+
+        self.level_map = logging.getLevelNamesMapping()
+        self.level = self.level_map[level.upper()]
+
+    def set_limit(self, limit):
+        self.limit = limit
+        self.trim(limit)
+
+    def trim(self, nitems):
+
+        with self.lock:
+            if len(self.heap) > nitems:
+                self.heap = heapq.nlargest(nitems, self.heap)
+                heapq.heapify(self.heap)
+
+    def add(self, record):
+
+        record_key = RecordKey(record)
+
+        if not self.filters.match(record["name"]):
             return
 
-        self.n_unchanged_stats = 0
-        self.n_consecutive_size_changes = 0
+        level = self.level_map.get(record["levelname"].upper(), None)
+        if level is None or level < self.level: 
+            return
 
-        if self.inode != stats.st_ino or self.dev != stats.st_dev:
-            self.inode = stats.st_ino
-            self.dev = stats.st_dev
-            self.size = 0
-            self.file = stream
-
-            if self.firsttime:
-                offset = 1000
-                self.size = max(stats.st_size - offset, 0)
+        with self.lock:
+            if self.limit is None or len(self.heap) < self.limit:
+                heapq.heappush(self.heap, record_key)
             else:
-                self.size = 0
+               heapq.heappushpop(self.heap, record_key)
 
-    def poll(self):
-        """Poll files for changes"""
+    def flush(self):
 
-        if not self.file:
-            self.reopen()
-            return None
+        while self.heap:
+            with self.lock:
+                record = heapq.heappop(self.heap).record
+            print_record(record)
+
+# -------------------------------------------------------------------------
+# record handling
+# -------------------------------------------------------------------------
+
+
+def print_record(record):
+    
+    styles = {
+        "CRITICAL": "red",
+        "ERROR":    "bold red",
+        "WARNING":  "yellow",
+        "INFO":     "green",
+        "DEBUG":    "cyan",
+    }
+
+    level = record.get("levelname", "")
+    msg = record.get("message", "")
+    ts = record.get("asctime", "")
+    name = record.get("name", "")
+    exc = record.get("exc_info", "")
+    threadname = record.get("threadName", "")
+
+    if threadname:
+        name = f"{name} [{threadname}]"
+
+    style = styles.get(level, "white")
+
+    if level == "ERROR":
+        msg_style = styles.get(level)
+    else:
+        msg_style = "white" 
+
+    text = Text.assemble(
+        (f"[{ts} "),
+        (f"{level:>7}", style),
+        (f"] {name}: "),
+        (f"{msg}", msg_style),
+    )
+
+    console.print(text, soft_wrap=True)
+
+    if exc:
+        line = f"{exc}"
+        text = Panel(line, style=style)
+        console.print(text, soft_wrap=True)
+
+def plain_print_record(record):
+
+    try:
+        if "threadName" in record:
+            print("[{asctime} {levelname}] {name}: {message}".format(**record))
+        else:
+            print("[{asctime} {levelname}] {name}: {message}".format(**record))
+
+        if "exc_info" in record:
+            print(record["exc_info"])
+
+    except KeyError:
+        pass
+
+def split_message(full_message):
+    """Split trackback from message if present"""
+    idx = full_message.find("Traceback")
+    if idx == -1:
+        return full_message, None 
+    return full_message[:idx].rstrip(), full_message[idx:]
+
+def parse_records(content):
+    """Parse the contents (text or json) into a list of records"""
+
+    records = []
+
+    # First try to parse as a text file
+
+    for m in text_parser.finditer(content):
+        record = m.groupdict()
+        msg, exc = split_message(record.pop("full_message"))
+        record["message"] = msg
+        record["exc_info"] = exc
+        records.append(record)
+
+    if records:
+        return records
+
+    # Otherwise it is a JSON file
+
+    records = []
+
+    for line in content.split("\n"):
+        try:
+            record = json.loads(line)
+            if isinstance(record, dict) and "asctime" in record:
+                records.append(record)
+        except json.JSONDecodeError:
+            continue
+
+    return records
+
+
+# -------------------------------------------------------------------------
+# file reader
+# -------------------------------------------------------------------------
+
+FileMetadata = namedtuple("FileMetadata", ["pos", "ino", "dev"])
+
+
+class FileReader:
+    def __init__(self, path, record_queue):
+        self.path = path.resolve()
+        self.record_queue = record_queue
+        self.metadata = self.reset(self.path)
+
+        self.read_new_content()
+
+    def reset(self, path):
+        """Reset file metadata"""
+
+        stat = path.stat()
+        return FileMetadata(0, stat.st_ino, stat.st_dev)
+
+    def read_new_content(self):
+        """Read from a file position and update metadata."""
+
+        curr = self.path.stat()
+        prev = self.metadata
+
+        # Check for rotation or turncation
+
+        if (
+            curr.st_ino != prev.ino
+            or curr.st_dev != prev.dev
+            or curr.st_size < prev.pos
+        ):
+            self.metadata = self.reset(self.path)
+
+        with self.path.open("r", encoding="utf-8") as f:
+            f.seek(self.metadata.pos)
+            content = f.read()
+            self.metadata = FileMetadata(f.tell(), curr.st_ino, curr.st_dev)
+            for record in parse_records(content.rstrip("\n")):
+                self.record_queue.add(record)
+
+
+# -------------------------------------------------------------------------
+# file manager
+# -------------------------------------------------------------------------
+
+
+class FileManager:
+    """Manage group of FileReader objects"""
+
+    def __init__(self, record_queue):
+        self.record_queue = record_queue
+        self.file_readers = {}
+
+    def process(self, path):
+        """Read new content from path"""
+
+        if path not in self.file_readers:
+            self.add(path)
 
         try:
-            stat = os.stat(self.name)
-        except:  # pylint: disable=bare-except
-            self.file = None
-            return None
+            self.file_readers[path].read_new_content()
+        except FileNotFoundError:
+            pass
 
-        if self.size == stat.st_size:
-            self.n_unchanged_stats += 1
-            self.n_consecutive_size_changes = 0
-            if self.n_unchanged_stats > 5:
-                self.reopen()
-            return None
-
-        self.n_unchanged_stats = 0
-        self.n_consecutive_size_changes += 1
-
-        if self.n_consecutive_size_changes > 200:
-            self.reopen()
-            return None
-
-        if self.size > stat.st_size:
-            self.reopen()
-            return None
-
-        self.file.seek(self.size)
-        data = self.file.read()
-        self.size = self.file.tell()
-
-        if self.firsttime:
-            self.firsttime = False
-            if not data.startswith("\n") and "\n" in data:
-                # Start at a newline
-                data = data.split("\n", 1)[1]
-
-        return data.rstrip()
+    def add(self, path):
+        """Add a new FileReader to the managed group"""
+        self.file_readers[path] = FileReader(path, self.record_queue)
 
 
-def parsedate(line):
-    """Get date field in line"""
-    return line.split("]")[0][1:].rsplit(" ", 1)[0].strip()
+# -------------------------------------------------------------------------
+# event handler
+# -------------------------------------------------------------------------
 
 
-class Tail:
-    """Display the last lines of a groups of files"""
+class EventHandler(FileSystemEventHandler):
+    """Process new records on file change"""
 
-    def __init__(self, args):
-        self.rate = 0.5
-        self.args = args
-        self.verbose = args.verbose
-        self.specs = args.groups
-        self.config = TransportConfig()
-        self.trackers = {}
+    def __init__(self, file_manager, file_ext=".log"):
+        self.file_ext = file_ext
+        self.file_manager = file_manager
 
-        self.logpath = self.config.get_path("DEFAULT", "path.logfiles")
+    def on_modified(self, event):
+        """Read new content on change"""
 
-        path = self.config.get_path("TransportServer", "log.file")
-        self.serverlog = path.relative_to(self.logpath)
+        path = Path(event.src_path).resolve()
 
-    def scan_groups(self, specs):
-        """Scan for log files"""
+        if event.is_directory or self.file_ext != path.suffix: 
+            return
 
-        logfiles = [p.relative_to(self.logpath) for p in self.logpath.glob("**/*.log")]
-
-        groups = []
-
-        for spec in specs:
-            path = Path(spec)
-            groups.append(path)
-            groups.extend(list(path.parents)[: self.args.parents])
-
-        watch = set()
-
-        for group in groups:
-            if str(group) == ".":
-                watch.add(self.serverlog)
-                if self.args.recursive:
-                    watch.update(logfiles)
-                continue
-            if self.args.recursive:
-                watch.update([p for p in logfiles if p.full_match(f"{group}/**/*.log")])
-            watch.update([p for p in logfiles if p.full_match(f"{group}/*.log")])
-            watch.update([p for p in logfiles if p.full_match(f"{group}.log")])
-
-        return watch
-
-    def update_trackers(self, trackers, paths):
-        """Update current log file trackers"""
-
-        result = {}
-
-        for path in paths:
-            key = str(path)
-            if key in trackers:
-                tracker = trackers[key]
-            else:
-                tracker = FileTracker(self.logpath.joinpath(path))
-
-            result[key] = tracker
-
-        return result
-
-    def run(self):
-        """Print the last 10 lines of each file, sort by time"""
-
-        if self.verbose:
-            paths = self.scan_groups(self.specs)
-
-            print("=" * 75)
-            print(f"Looking in {self.specs}")
-            if self.args.parents is None:
-                print("Parents: all")
-            else:
-                print(f"Parents: {self.args.parents}")
-            print(f"Total log files: {len(paths)}")
-            for path in paths:
-                print(path)
-            print("=" * 75)
-
-        # Tail forever
-
-        while True:
-            paths = self.scan_groups(self.specs)
-            self.trackers = self.update_trackers(self.trackers, paths)
-
-            lines = []
-            for tracker in self.trackers.values():
-                output = tracker.poll()
-                if not output:
-                    continue
-
-                if output.startswith("["):
-                    output = "\n" + output
-
-                for entry in output.split("\n["):
-                    if entry:
-                        lines.append("[" + entry)
-
-            if lines:
-                lines.sort(key=parsedate)
-                print(*lines, sep="\n")
-
-            time.sleep(self.rate)
+        self.file_manager.process(path)
 
 
-def handler(_signum, _frame):
-    """Signal handler"""
-    sys.exit(0)
+# -------------------------------------------------------------------------
+# main
+# -------------------------------------------------------------------------
+
+
+def parse_command_line():
+    """Parse command line"""
+
+    try:
+        config = TransportConfig()
+    except FileNotFoundError as e:
+        print(e)
+        if "DATA_TRANSPORT_PATH" not in os.environ:
+            print("DATA_TRANSPORT_PATH is not set")
+        sys.exit(1)
+
+    logpath = config.get_path("DEFAULT", "path.logfiles")
+    ext = config.get_path("TransportServer", "log.file").suffix
+
+    defaults = dotdict({"logpath": logpath, "ext": ext, "limit": 30})
+
+    desc = f"Data Transport Log Viewer {VERSION}"
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument(
+        "filters", nargs="*", default=["*"], help="group and/or client names"
+    )
+
+    parser.add_argument(
+        "-r", "--recursive", action="store_true", help="Show child log files"
+    )
+
+    parser.add_argument(
+        "-u", "--parents", action="store_true", help="Show parent log files"
+    )
+
+    parser.add_argument(
+        "-s", "--server", action="store_true", help="Show TransportServer logs"
+    )
+
+    parser.add_argument(
+        "-b", "--no-follow", action="store_true", help="Show existing logs and exit"
+    )
+
+    parser.add_argument(
+        "-l", "--level", 
+        choices=["notset", "debug", "info", "warning", "error", "critical"],
+        default="notset",
+        help="Show messages from this level and higher"
+    )
+
+    parser.add_argument(
+        "-n",
+        "--limit",
+        metavar="N",
+        type=int,
+        default=defaults.limit,
+        help=f"Limit to last N records (default {defaults.limit})",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--logpath",
+        type=Path,
+        default=defaults.logpath,
+        metavar="PATH",
+        help=f"Base path for log files (default {defaults.logpath})",
+    )
+
+    parser.add_argument(
+        "-e", "--ext", default=ext, help=f"Log file extension (default {defaults.ext})"
+    )
+
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+
+    parser.add_argument("-V", "--version", action="version", version=VERSION)
+
+    args = parser.parse_args()
+
+    if args.server:
+        args.filters.append("TransportServer")
+
+    if args.parents:
+        for pattern in list(args.filters):
+            # skip the last parent, which will be . or /
+            for parent in Path(pattern).parents[:-1]:
+                args.filters.append(str(parent))
+
+    for pattern in list(args.filters):
+        if args.recursive:
+            args.filters.append(f"{pattern}/**")
+        else:
+            args.filters.append(f"{pattern}/*")
+
+    return args
+
+
+def scan_existing_files(file_manager, args):
+    """Initialize tracking for existing files"""
+
+    logfiles = [p.resolve() for p in args.logpath.glob(f"**/*{args.ext}*")]
+
+    for path in sorted(logfiles, reverse=True):
+        file_manager.add(path)
 
 
 def main():
     """Main application"""
 
-    signal.signal(signal.SIGINT, handler)
+    args = parse_command_line()
+    filters = FilterManager(args.filters)
 
-    desc = "Data Transport Log Viewer"
-    parser = argparse.ArgumentParser(description=desc)
+    record_queue = RecordQueue(filters, level=args.level, limit=args.limit)
+    file_manager = FileManager(record_queue)
 
-    parser.add_argument(
-        "groups", nargs="*", help="Server/Group/Client names", default="."
-    )
-    parser.add_argument(
-        "-r", "--recursive", action="store_true", help="Show child log files"
-    )
-    parser.add_argument(
-        "-p",
-        "--parents",
-        nargs="?",
-        const=None,
-        default=0,
-        type=int,
-        help="Show parent log files",
-    )
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
-    parser.add_argument("-V", "--version", action="version", version=VERSION)
+    scan_existing_files(file_manager, args)
 
-    args = parser.parse_args()
+    if args.no_follow:
+        record_queue.flush()
+        sys.exit(0)
 
-    Tail(args).run()
+    # Make sure we can buffer a reasonable number between flushes
+    record_queue.set_limit(1000)
+
+    event_handler = EventHandler(file_manager, args.ext)
+
+    observer = Observer()
+    observer.schedule(event_handler, args.logpath, recursive=True)
+    observer.start()
+
+    try:
+        while True:
+            record_queue.flush()
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+
+
+if __name__ == "__main__":
+    main()
