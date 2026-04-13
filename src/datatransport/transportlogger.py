@@ -17,18 +17,23 @@
 #                   will let loggers in libraries to still log to 
 #                   the right formatter/handler through propogation.
 #
+#   2026-03-09  Todd Valentic
+#               Add JSON formatting
+#               Use setLevel's ability to handle string input 
+#
 ##########################################################################
 
 import logging
 
 from logging.handlers import RotatingFileHandler
 from logging.handlers import SocketHandler
+from pythonjsonlogger import jsonlogger
 
 
 from .utilities import make_path
 
 
-def _setup_log_socket_handler(config, formatter):
+def setup_log_socket_handler(config, formatter):
     """Add a socket log handler"""
 
     host = config.get("log.socket.host", "localhost")
@@ -40,7 +45,7 @@ def _setup_log_socket_handler(config, formatter):
     return socket_handler
 
 
-def _setup_log_file_handler(config, formatter):
+def setup_log_file_handler(config, formatter):
     """Add a rotating file log handler"""
 
     filename = config.get("log.file")
@@ -55,8 +60,8 @@ def _setup_log_file_handler(config, formatter):
     return rotating_handler
 
 
-def _setup_log_formatter(config):
-    """Initialize a log formatter"""
+def setup_text_formatter(config):
+    """Create a text formatter"""
 
     msgfmt = "[%(asctime)s.%(msecs)03d %(levelname)7s] %(name)s: " 
 
@@ -69,13 +74,19 @@ def _setup_log_formatter(config):
 
     return logging.Formatter(msgfmt, datefmt)
 
+def setup_json_formatter(config):
+    """Create a json formatter"""
 
-#def create_transport_logger(config, name, standalone=False):
+    msgfmt = "%(asctime)s %(levelname)s %(name)s %(message)s"
+
+    if config.get_boolean("log.showtread", False):
+        msgfmt += "%(threadName)s"
+
+    return jsonlogger.JsonFormatter(msgfmt)
+
+
 def create(config, name, standalone=False):
     """Create a logger for data transport processes"""
-
-    level = config.get("log.level", "info")
-    formatter = _setup_log_formatter(config)
 
     if standalone:
         logger = logging.getLogger(name)
@@ -87,19 +98,18 @@ def create(config, name, standalone=False):
         handler.close()
         logger.removeHandler(handler)
 
+    match config.get("log.format", "text"):
+        case "text":
+            formatter = setup_text_formatter(config)
+        case "json":
+            formatter = setup_json_formatter(config)
+            
     if config.get_boolean("log.file.enable", True):
-        logger.addHandler(_setup_log_file_handler(config, formatter))
+        logger.addHandler(setup_log_file_handler(config, formatter))
 
     if config.get_boolean("log.socket.enable", True):
-        logger.addHandler(_setup_log_socket_handler(config, formatter))
+        logger.addHandler(setup_log_socket_handler(config, formatter))
 
-    if level == "error":
-        logger.setLevel(logging.ERROR)
-    if level == "warning":
-        logger.setLevel(logging.WARNING)
-    elif level == "info":
-        logger.setLevel(logging.INFO)
-    elif level == "debug":
-        logger.setLevel(logging.DEBUG)
+    logger.setLevel(config.get("log.level", "info").upper())
 
-    return logger if standalone else logging.getLogger(name)
+    return logging.getLogger(name)
