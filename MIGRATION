@@ -58,11 +58,11 @@ Migrating from version 2.x to 3.x (python2 -> python3)
 * accessmixin
 
     removed isRunning and isStopped. Use running propoery instead.
-    currentTime -> current_time
+    currentTime -> now
 
 * processclient
 
-    currentTime -> current_time
+    currentTime -> now
     loadConfig -> load_config
     setupSignals -> setup_signals
     setupEnvironment -> setup_environment
@@ -79,6 +79,8 @@ Migrating from version 2.x to 3.x (python2 -> python3)
     config changes:
         atStart -> at_start
         exitOnError -> exit_on_error
+
+    self.main = self.news_poller.main
 
 * newspostmixin
 
@@ -148,4 +150,35 @@ Migrating from version 2.x to 3.x (python2 -> python3)
         getNextMessage
 
     
-    
+Parameter changes:
+
+    In general:
+
+        from Transport import ProcessClient -> from datatransport import ProcessClient
+        from Transport.utilities import ProcessClient -> from datatransport import ProcessClient
+
+        or
+
+        import DataTransport at dt
+            dt.ProcessClient
+            dt.utilities.PatternTemplate
+
+        all config file access:
+
+            self.get() -> self.config.get()
+
+            getboolean() -> get_boolean()
+            getRate() -> get_rate()
+       
+    ProcessClient
+        access config with self.config.get instead of self.get methods
+        you do not need to use "fallback" for defaults in this case
+
+    rate.atStart -> rate.at_start
+
+    archivegroups
+
+        startCurrent -> start_current
+        waitOnStart -> wait_on_start
+
+
