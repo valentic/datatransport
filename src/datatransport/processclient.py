@@ -166,7 +166,7 @@
 #
 #   2023-07-25  Todd Valentic
 #               Add set() and options() to config proxy
-#               Do not map getters from config, use config object               
+#               Do not map getters from config, use config object
 #               current_time() renamed to now()
 #
 #   2026-03-05  Todd Valentic
@@ -175,6 +175,10 @@
 #   2023-03-08  Todd Valentic
 #               Use transportlogger to setup the logger.
 #               Remove self.utc - use datetime.UTC instead
+#
+#   2026-04-15  Todd Valentic
+#               No longer require argv to be passed into constructor,
+#                   take directly from sys.argv
 #
 ###########################################################################
 
@@ -207,7 +211,11 @@ from . import transportlogger
 class ProcessClient(Root):
     """ProcessClient"""
 
-    def __init__(self, argv):
+    def __init__(self, argv=None):
+
+        if argv is None:
+            argv = sys.argv
+
         self.groupname = argv[1]
         self.name = argv[2]
         self.subprocs = set()
@@ -271,9 +279,7 @@ class ProcessClient(Root):
     def setup_log(self):
         """Setup log handlers"""
 
-        self.log = transportlogger.create(
-            self.config, f"{self.groupname}/{self.name}"
-        )
+        self.log = transportlogger.create(self.config, f"{self.groupname}/{self.name}")
 
     def load_config(self):
         """Load the configuration files"""
@@ -313,7 +319,7 @@ class ProcessClient(Root):
         paths += ":" + self.config.get("group.bin")
         paths += ":" + self.config.get("path.bin")
 
-        os.environ["PATH"] = paths 
+        os.environ["PATH"] = paths
 
         options = self.config.options()
 
