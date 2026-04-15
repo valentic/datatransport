@@ -78,20 +78,20 @@ class BaseDirectory:
         """Wait until the service is ready"""
 
         ready = False
-        report = True
+        waiting = False
 
         while not ready and self.is_running():
             try:
                 service.ident()
                 ready = True
             except Exception as e:
-                if report:
+                if not waiting: 
                     self.log.info("Waiting for service '%s' to start", label)
-                    report = False
+                    waiting = True
                 self.log.debug(e)
                 self.wait(2)
 
-        if ready:
+        if ready and waiting:
             self.log.info("Service '%s' is ready", label)
 
     def connect(self, service, defer=False, **kw):
