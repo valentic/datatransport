@@ -1,3 +1,10 @@
+2026-04-14  Todd Valentic
+    - Directory client - reduce log output on connect
+    - Directory client - add timeout to standalone client
+    - ProcessClient - no longer require sys.argv to be passed in __init__ 
+    - Major updates to xmlrpc console (command completion, appearance)
+    - Release 3.0.28
+
 2026-03-07  Todd Valentic
     - Improve logging setup. Handlers only on root
     - Consolidate logging setup to use transportlogger
