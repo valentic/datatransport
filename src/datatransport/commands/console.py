@@ -7,6 +7,28 @@
 #
 #   Run commands from an XML-RPC service.
 #
+#   Note - history saving
+#
+#   There is an issue using the readline module history file with different
+#   versions of Python. In particular, it is which readline backend an
+#   interpreter uses. Most distribution Pythons use the GNU Readline while
+#   MacOS Homebrew and uv's standalone Python releases use libedit. There is
+#   an issue when the history length is truncated with set_history_length().
+#   Under libedit, the saved file is missing the header and a subsequent
+#   read results in an OSError [Errno 22] Invalid argument error. This can
+#   also happen if the program is first run under one version of Python and
+#   then run with another at a later time. The standalone python version
+#   made this change starting with 3.10. This program works around this by
+#   managing its own writing and reading of the history file.
+#
+#   readline.set_history_length results in unreadable history files
+#   https://github.com/astral-sh/python-build-standalone/issues/281
+#
+#   readline.set_history_length corrupts history files when used in a libedit build
+#   https://github.com/python/cpython/issues/121160
+#
+#   https://gregoryszorc.com/docs/python-build-standalone/main/quirks.html#use-of-libedit-on-linux
+#
 #   2006-02-20  Todd Valentic
 #               Initial implementation.
 #
@@ -23,148 +45,113 @@
 #   2023-19-07  Todd Valentic
 #               Add pprint option
 #
+#   2026-04-20  Todd Valetnic
+#               Add -V / --version
+#               Add -v / --verbose
+#               Change host option to be -s (was -r) for consistency
+#                   with other transport programs.
+#               Use rich for printing instead of pprint
+#               Use standalone directory class
+#               No longer need to set global socket timeout
+#               Use pathlib
+#               Use readline for history
+#               Auto connect at start
+#               Use tables in listings
+#               Show method descriptions when listing a service
+#
 ###########################################################################
 
 import argparse
 import fnmatch
 import cmd
+import logging
 import os
-import pprint
-import socket
+from pathlib import Path
+import textwrap
+
 import xmlrpc.client
+import readline
 
-socket.setdefaulttimeout(100)
+from datatransport.directory.standalone import Directory
+from rich import print, box
+from rich.table import Table
 
-VERSION=1.1
+VERSION = "1.1.1"
 
-class Console(cmd.Cmd):
+
+class XMLRPC_Console(cmd.Cmd):
     """XMLRPC Console"""
 
-    def __init__(self, args):
+    def __init__(self, options):
         cmd.Cmd.__init__(self)
 
-        self.intro = self.make_intro()
+        self.log = logging.getLogger()
+
         self.prompt = "[not connected] >>> "
-        self.options = args
-        self.pprint = True
-
-        self.configdir = os.path.expanduser("~/.acorn")
-        self.configfile = os.path.join(self.configdir, "history")
-
-        if not os.path.exists(self.configdir):
-            os.makedirs(self.configdir)
-
-        self.load_history()
-
+        self.options = options
+        self.directory = None
         self.service_cache = {}
 
-    def connect(self, service):
-        """Connect to directory"""
+        state_home = Path(os.environ.get("XDG_STATE_HOME", "~/.local/state"))
+        state_home = state_home.expanduser()
+        self.history_file = state_home / "transport" / "console.history"
+        readline.set_auto_history(False)
 
-        url = self.directory.get(service, "url")
-        return xmlrpc.client.ServerProxy(url)
-
-    def make_intro(self):
-        """Banner"""
-
-        width = 75
-        intro = []
-        intro.append("")
-        intro.append("-" * width)
-        intro.append(f"XML-RPC Service Control Console {VERSION}".center(width))
-        intro.append('Type "help" for a list commands'.center(width))
-        intro.append("-" * width)
-        intro.append("")
-
-        return "\n".join(intro)
+        self.do_connect("")
 
     # -- History --------------------------------------------------------
 
-    def load_history(self):
-        """Load history"""
-
-        self.history_cache = {}
-        self.history_index = 0
-
-        if not os.path.exists(self.configfile):
-            return
-
-        with open(self.configfile, "rt", encoding="utf-8") as f:
-            for entry in f:
-                index, command = entry.split(":", 1)
-                index = int(index)
-                self.history_cache[index] = command.strip()
-                self.history_index = max(self.history_index, index)
-
-        self.trim_history()
-
-    def save_history(self):
-        """Save history"""
-
-        with open(self.configfile, "wt", encoding="utf-8") as output:
-            keys = sorted(self.history_cache)
-
-            for index in keys:
-                output.write(f"{index}: {self.history_cache[index]}")
-
-    def trim_history(self):
-        """Trim history entries"""
-
-        cutoff = self.history_index - self.options.maxhistory + 1
-
-        for index in list(self.history_cache.keys()):
-            if index < cutoff:
-                del self.history_cache[index]
-
     def do_clear(self, _arg):
         """clear history cache"""
-
-        self.history_cache = {}
-        self.history_index = 0
-        self.save_history()
+        readline.clear_history()
 
     def do_shell(self, args):
-        """Run previous commands"""
+        """Run previous commands with !<index>"""
 
-        args = [int(x) for x in args.split()]
-        for index in args:
-            if self.onecmd(self.history_cache[index]):
-                return True
+        try:
+            index = int(args)
+        except ValueError:
+            print("Error: cannot parse index")
+            return False
+
+        if index < readline.get_current_history_length():
+            self.onecmd(readline.get_history_item(index))
 
         return False
 
     def do_history(self, _args):
-        """history - print a list of commands that have been entered"""
+        """Show the command history"""
 
-        for index in sorted(self.history_cache):
-            print(f"{index:2}: {self.history_cache[index]}")
+        # readline history index is one-based
+
+        for index in range(1, readline.get_current_history_length() + 1):
+            print(f"{index:3}: {readline.get_history_item(index)}")
 
         return False
 
     # -- Connection ------------------------------------------------------
 
     def do_connect(self, arg):
-        """connect [directory [port]] -- connect to directory service"""
+        """connect [host[:port] or port] -- connect to directory service"""
 
-        arg = arg.split()
+        if ":" in arg:
+            arg = arg.split(":")
+        else:
+            arg = arg.split()
 
         if not arg:
             host, port = self.options.host, self.options.port
         elif len(arg) == 1:
-            host, port = arg[0], self.options.port
+            if arg[0].isdigit():
+                host, port = self.options.host, int(arg[0])
+            else:
+                host, port = arg[0], self.options.port
         else:
             host, port = arg
 
-        url = f"http://{host}:{port}"
-        self.directory = xmlrpc.client.ServerProxy(url)
+        self.directory = Directory(host=host, port=port, hold=False)
 
-        try:
-            self.directory.ident()
-        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
-            print(f"Error connecting to directory on {host}:{port}: {err}")
-            return ""
-
-        print(f"Connected to directory at {host}:{port}")
+        print(f"Connecting to directory at {host}:{port}")
 
         self.prompt = f"[{host}:{port}] >>> "
 
@@ -178,23 +165,10 @@ class Console(cmd.Cmd):
 
         try:
             services = self.directory.list()
-            if isinstance(services, list):
-                # Handle older format 
-                for service in services: 
-                    label = self.directory.get(service, "label")
-                    host = self.directory.get(service, "host")
-                    port = self.directory.get(service, "port")
-                    self.service_cache[service] = (label, host, port)
-            else:
-                for service, info in services.items():
-                    label = info["label"]
-                    host = info["host"]
-                    port = info["port"]
-                    self.service_cache[service] = (label, host, port)
-        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
-            print(f"Error connecting to server: {err}")
-
-        print(f"Refreshed -- {len(self.service_cache)} services")
+            self.service_cache = {name: info for name, info in services.items()}
+            print(f"Refreshed -- {len(self.service_cache)} services")
+        except Exception as err:
+            print(f"Error connecting to directory: {err}")
 
         return False
 
@@ -214,13 +188,24 @@ class Console(cmd.Cmd):
 
         names = sorted(self.service_cache)
 
+        print()
         print(f"There are {len(names)} services registered:")
 
-        width = max(len(x) for x in names)
+        table = Table(box=box.ROUNDED)
+
+        table.add_column("Service")
+        table.add_column("Description")
+        table.add_column("Source")
 
         for name in names:
-            label, host, port = self.service_cache[name]
-            print(f"[{host}:{port}] {name.ljust(width)} - {label}")
+            info = self.service_cache[name]
+            label = info["label"]
+            host = info["host"]
+            port = str(info["port"])
+
+            table.add_row(name, label, f"{host}:{port}")
+
+        print(table)
 
         return False
 
@@ -230,31 +215,64 @@ class Console(cmd.Cmd):
         if not arg:
             return self.onecmd("services")
 
-        if arg not in self.service_cache:
-            print("no service by that name. need to refresh?")
+        name = arg.split()[0]
+
+        if name not in self.service_cache:
+            print("Unkonwn service. Do you need to refresh?")
             return False
 
         try:
-            service = self.connect(arg)
-            commands = sorted(service.system.listMethods())
+            service = self.directory.connect(name, hold=False)
+            methods = sorted(service.system.listMethods())
+            methods = [m for m in methods if not m.startswith("system.")]
+            docs = {name: service.system.methodHelp(name) for name in methods}
         except (ConnectionRefusedError, xmlrpc.client.Error) as err:
-            print(f"problem communicating with service: {err}")
+            print(f"Problem communicating with service: {err}")
             return False
 
-        print(f"There are {len(commands)} commands in {arg}:")
+        print()
+        print(f"There are {len(methods)} methods in the {name} service:")
 
-        for name in commands:
-            print(f"  {name}")
+        table = Table(box=box.ROUNDED, show_header=False)
+        table.add_column("Method")
+        table.add_column("Description")
+
+        for name in methods:
+            table.add_row(name, docs[name])
+
+        print(table)
 
         return False
 
     def complete_list(self, text, line, _begidx, _endidx):
         """Autocompletion handler"""
 
-        names = self.service_cache.keys()
-        prefix = line.split()[1].strip()
-        matches = fnmatch.filter(names, prefix + "*")
-        matches = [name.replace(prefix, text) for name in matches]
+        nargs = len(line.split())
+
+        if nargs==2 and text=="": 
+            match = []
+        else:
+            match = fnmatch.filter(self.service_cache, f"{text}*") 
+
+        return match
+
+    def complete_run(self, text, line, _begidx, _endidx):
+        """Autocompletion handler"""
+
+        args = line.split()
+        nargs= len(args)
+
+        if nargs==1 or (nargs==2 and text):
+            matches = fnmatch.filter(self.service_cache, f"{text}*")
+        else:
+            service = self.directory.connect(args[1], hold=False)
+            methods = service.system.listMethods()
+            matches = fnmatch.filter(methods, f"{text}*")
+
+        if len(matches)==1 and not matches[0].endswith(" "):
+            matches = [matches[0]+" "]
+
+        #print(f"{matches=}")
 
         return matches
 
@@ -263,49 +281,31 @@ class Console(cmd.Cmd):
     def do_run(self, arg):
         """Run command handler"""
 
-        arg = arg.split()
-
-        if len(arg) < 2:
+        try:
+            arg = arg.split()
+            service_name = arg[0]
+            method_name = arg[1]
+            params = arg[2:]
+        except IndexError:
             print("Need to specify service and method names")
             return False
 
         try:
-            service = self.connect(arg[0])
-        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
-            print(f"Failed to connect to {arg[0]}: {err}")
+            service = self.directory.connect(service_name, hold=False)
+        except Exception as err:
+            print(f"Failed to connect to {service_name}: {err}")
             return False
-
-        method = arg[1]
-        params = arg[2:]
-
-        func = getattr(service, method)
 
         try:
+            func = getattr(service, method_name)
             output = func(*params)
-        except (ConnectionRefusedError, xmlrpc.client.Error) as err:
-            print(f"Problem running command: {err}")
+        except Exception as err:
+            print(err)
             return False
 
-        if self.pprint:
-            pprint.pprint(output)
-        else:
-            print(output)
+        print(output)
 
         return False
-
-    # -- Options ---------------------------------------------------------
-
-    def do_pprint(self, state):
-        """Set pretty printing state (on | off)"""
-
-        if state == "on":
-            self.pprint = True 
-        elif state == "off":
-            self.pprint = False 
-        else:
-            print(f"pprint is {'on' if self.pprint else 'off'}")
-
-        return False 
 
     # -- Control ---------------------------------------------------------
 
@@ -313,20 +313,61 @@ class Console(cmd.Cmd):
         """quit -- terminates the application"""
         return True
 
+    def read_history(self, filename):
+        """Read the history file - work around libedit bug"""
+
+        readline.clear_history()
+
+        with filename.open("r", encoding="utf-8") as file:
+            for line in file:
+                readline.add_history(line.strip())
+
+    def write_history(self, filename):
+        """Write the hisory to file - work around libedit bug"""
+
+        filename.parent.mkdir(parents=True, exist_ok=True)
+
+        max_history = 10
+        current_len = readline.get_current_history_length()
+        start_index = max(0, current_len - max_history)
+
+        with filename.open("w", encoding="utf-8") as file:
+            for index in range(start_index, current_len):
+                file.write(f"{readline.get_history_item(index + 1)}\n")
+
     def preloop(self):
-        cmd.Cmd.preloop(self)
-        self.service_cache = {}
+        # Load history at startup
+
+        if self.history_file.exists():
+            self.read_history(self.history_file)
 
     def postloop(self):
-        cmd.Cmd.postloop(self)
-        self.save_history()
-        print("Exiting...")
+        # Save history on exit
+        self.write_history(self.history_file)
+
+    def valid_history(self, line):
+        """Valid line to save in history file"""
+
+        if not line:
+            return False
+
+        if line.startswith("!"):
+            return False
+
+        if line in ["h", "history", "help", "EOF"]:
+            return False
+
+        history_len = readline.get_current_history_length()
+        if history_len:
+            if line == readline.get_history_item(history_len):
+                return False
+
+        return True
 
     def precmd(self, line):
-        if line and not line.startswith("!"):
-            self.history_index += 1
-            self.history_cache[self.history_index] = line.strip()
-            self.trim_history()
+        line = line.strip()
+        if self.valid_history(line):
+            readline.add_history(line)
         return line
 
     def emptyline(self):
@@ -339,14 +380,25 @@ class Console(cmd.Cmd):
     do_exit = do_quit
     do_h = do_history
 
-    complete_run = complete_list
+    #complete_run = complete_list
 
 
-def main():
-    """Script entry point"""
+# -------------------------------------------------------------------------
+# Main application
+# -------------------------------------------------------------------------
 
-    parser = argparse.ArgumentParser(
-        description="Data Transport XMLRPC Service Console"
+
+def parse_command_line():
+    """Parse command line arguments"""
+
+    desc = f"Data Transport XMLRPC Service Console {VERSION}"
+    parser = argparse.ArgumentParser(description=desc)
+
+    parser.add_argument(
+        "-s",
+        "--host",
+        default="localhost",
+        help="direcotry host (%(default)s)",
     )
 
     parser.add_argument(
@@ -354,30 +406,52 @@ def main():
         "--port",
         default=8411,
         type=int,
-        help="port (default %(default)s)",
+        help="port (%(default)s)",
     )
 
-    parser.add_argument(
-        "-r",
-        "--host",
-        default="localhost",
-        help="direcotry host (default %(default)s)",
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("-V", "--version", action="version", version=VERSION)
 
-    parser.add_argument(
-        "-d",
-        "--maxhistory",
-        default=100,
-        type=int,
-        metavar="COUNT",
-        help="maximum history depth (default %(default)s",
-    )
+    options = parser.parse_args()
 
-    args = parser.parse_args()
+    if options.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
-    try:
-        Console(args).cmdloop()
-    except KeyboardInterrupt:
-        print("")
+    return options
 
+
+def show_banner():
+    """Banner"""
+
+    title = f"XML-RPC Service Console {VERSION}"
+
+    width = 75
+    print(textwrap.dedent(f"""
+        {"":->{width}}
+        {title:^{width}}
+        {'Type "help" for a list commands, "exit" when done.':^{width}}
+        {"":->{width}}
+    """
+    ))
+
+def main():
+    """Script entry point"""
+
+    show_banner()
+
+    options = parse_command_line()
+    console = XMLRPC_Console(options)
+
+    print()
+
+    while True:
+        try:
+            console.cmdloop()
+            break
+        except KeyboardInterrupt:
+            print()
+
+    print()
     print("Exiting")
