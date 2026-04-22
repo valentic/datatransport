@@ -61,6 +61,9 @@
 #   2023-07-04  Todd Valentic
 #               Convert from mixin class
 #
+#   2026-04-22  Todd Valentic
+#               Update help message for status()
+#
 ##########################################################################
 
 import threading
@@ -126,7 +129,7 @@ class XMLRPCServer(SimpleXMLRPCServer):
         return self.servicelabel
 
     def status(self):
-        """Indicate active"""
+        """Indicate if the service is active"""
         return 1
 
     def server_thread(self):
