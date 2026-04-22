@@ -39,13 +39,20 @@
 #   2026-04-13  Todd Valentic
 #               Split into base, framework and standalone versions
 #
+#   2026-04-20  Todd Valentic
+#               Set default values for log, wait, is_running in base
+#               Add hold override
+#
 ##########################################################################
 
 import http.client
+import logging
 import socket
+import time
 import xmlrpc.client
 
 from datatransport.utilities import xmlrpcdeferred
+
 
 class TimeoutTransport(xmlrpc.client.Transport):
     def __init__(self, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, *args, **kw):
@@ -56,23 +63,43 @@ class TimeoutTransport(xmlrpc.client.Transport):
         # HTTPConnection with timeout
         return http.client.HTTPConnection(host, timeout=self.timeout)
 
+
 class BaseDirectory:
     """Add methods to connect to the XMLRPC directory service"""
 
-    def __init__(self, url, log, wait, is_running, timeout=15):
-        self.log = log
-        self.wait = wait
-        self.is_running = is_running
+    def __init__(
+        self, url, log=None, wait=None, is_running=None, hold=True, timeout=15
+    ):
+        self.log = log or logging.getLogger("directory")
+        self.wait = wait or time.sleep
+        self.is_running = is_running or (lambda: True)
         self.timeout = timeout
 
         self.directory = xmlrpc.client.ServerProxy(
-            url, allow_none=True, use_builtin_types=True,
-            transport=TimeoutTransport(timeout=timeout)
+            url,
+            allow_none=True,
+            use_builtin_types=True,
+            transport=TimeoutTransport(timeout=timeout),
         )
 
         # Wait for the directory service to become ready
 
-        self.wait_until_ready(self.directory, "directory")
+        if hold:
+            self.wait_until_ready(self.directory, "directory")
+
+    def is_ready(self, service=None):
+        """Check if service is responding"""
+
+        if service is None:
+            service = self.directory
+
+        try:
+            service.ident()
+        except Exception as err:
+            self.log.debug(err)
+            return False
+
+        return True
 
     def wait_until_ready(self, service, label):
         """Wait until the service is ready"""
@@ -85,7 +112,7 @@ class BaseDirectory:
                 service.ident()
                 ready = True
             except Exception as e:
-                if not waiting: 
+                if not waiting:
                     self.log.info("Waiting for service '%s' to start", label)
                     waiting = True
                 self.log.debug(e)
@@ -94,7 +121,7 @@ class BaseDirectory:
         if ready and waiting:
             self.log.info("Service '%s' is ready", label)
 
-    def connect(self, service, defer=False, **kw):
+    def connect(self, service, defer=False, hold=None, **kw):
         """Connect to an XMLRPC service via the directory"""
 
         kwargs = {"allow_none": True, "use_builtin_types": True}
@@ -108,12 +135,15 @@ class BaseDirectory:
 
         url = self.directory.get(service, "url")
         server = xmlrpc.client.ServerProxy(url, **kwargs)
-        hold = self.directory.get(service, "hold")
+
+        if hold is None:
+            hold = self.directory.get(service, "hold")
 
         if hold and not defer:
             self.wait_until_ready(server, service)
         else:
-            self.log.info("Assuming service %s is ready", service)
+            self.log.debug("Assuming service %s is ready", service)
+            self.is_ready(server)
 
         return server
 
@@ -121,3 +151,6 @@ class BaseDirectory:
         """Proxy directory service get method"""
         return self.directory.get(service, option)
 
+    def list(self):
+        """Proxy directory service list method"""
+        return self.directory.list()

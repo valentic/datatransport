@@ -11,6 +11,9 @@
 #   2026-04-13  Todd Valentic
 #               Initial implementation.
 #
+#   2026-04-20  Todd Valentic
+#               Use base class defaults
+#
 ##########################################################################
 
 import logging
@@ -21,22 +24,8 @@ from .base import BaseDirectory
 class Directory(BaseDirectory):
     """Directory connector for use by standalone applications"""
 
-    def __init__(
-        self,
-        host="localhost",
-        port=8411,
-        log=None,
-        wait=time.sleep,
-        is_running=None,
-        timeout=15,
-    ):
-        url = f"http://{host}:{port}"
-        if log is None:
-            log = logging.getLogger()
-        wait = wait
-        if is_running is None:
-            is_running = lambda: True
-        super().__init__(url, log, wait, is_running)
+    def __init__(self, host="localhost", port=8411, **kwargs):
+        super().__init__(f"http://{host}:{port}", **kwargs)
 
 
 def connect(service_name, *pos, **kw):
