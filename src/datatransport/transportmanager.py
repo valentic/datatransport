@@ -9,6 +9,10 @@
 #               Add header comment block
 #               Reorder imports
 #
+#   2026-04-23  Todd Valentic
+#               Pass stderr to log formatter in extra instead
+#                   of using separate calls to log.error()
+#
 ##########################################################################
 
 import os
@@ -38,6 +42,7 @@ class TransportManager:
 
         self.tasks = []
         self.server = TransportServer(self.queue)
+        self.delay = self.server.config.get_timedelta("client.delay", 0.5)
 
     def handler(self, _signum, _frame):
         """Handle stop signals"""
@@ -64,10 +69,10 @@ class TransportManager:
             _stdout, stderr = task.communicate()
 
             if stderr:
-                self.server.log.error("Problem with %s:", ' '.join(task.args))
-
-                for line in stderr.split("\n"):
-                    self.server.log.error(line)
+                self.server.log.error(
+                    "Problem running %s:", ' '.join(task.args),
+                    extra={"stderr": stderr}
+                )
 
         return running
 
@@ -75,8 +80,6 @@ class TransportManager:
         """Main loop"""
 
         self.server.start()
-
-        delay = self.server.config.get_timedelta("client.delay", 0.5)
         tasks = []
 
         while self.server.running:
@@ -88,13 +91,10 @@ class TransportManager:
                 continue
 
             try:
-                # --pylint: disable=consider-using-with
-                task = self.launch(args, environ)
+                tasks.append(self.launch(args, environ))
+                time.sleep(self.delay.total_seconds())
             except (PermissionError, subprocess.SubprocessError) as err:
                 self.server.log.error("Problem starting %s: %s", args, err)
-
-            time.sleep(delay.total_seconds())
-            tasks.append(task)
 
         self.server.shutdown()
         self.server.join()

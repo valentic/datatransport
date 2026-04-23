@@ -2,7 +2,8 @@
     - Directory client - reduce log output on connect
     - Directory client - add timeout to standalone client
     - ProcessClient - no longer require sys.argv to be passed in __init__ 
-    - Major updates to xmlrpc console (command completion, appearance)
+    - Major updates to xmlrpc console (better command completion, appearance)
+    - viewlog - show processclient startup errors in a panel
     - Release 3.0.28
 
 2026-03-07  Todd Valentic

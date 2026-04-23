@@ -11,6 +11,9 @@
 #               Try to remain compatible with original.
 #               Release 3.2.0
 #
+#   2026-04-23  Todd Valentic
+#               Look for stderr passed in extra field, show in panel
+#
 ##########################################################################
 
 import argparse
@@ -233,7 +236,8 @@ def print_record(record):
     msg = record.get("message", "")
     ts = record.get("asctime", "")
     name = record.get("name", "")
-    exc = record.get("exc_info", "")
+    exc = record.get("exc_info", None)
+    stderr = record.get("stderr", None)
     threadname = record.get("threadName", "")
 
     if threadname:
@@ -260,6 +264,11 @@ def print_record(record):
         text = Panel(line, style=style)
         console.print(text, soft_wrap=True)
 
+    if stderr:
+        line = f"{stderr}"
+        text = Panel(line, style=style)
+        console.print(text, soft_wrap=True)
+
 def plain_print_record(record):
 
     try:
@@ -270,6 +279,9 @@ def plain_print_record(record):
 
         if "exc_info" in record:
             print(record["exc_info"])
+
+        if "stderr" in record:
+            print(record["stderr"])
 
     except KeyError:
         pass

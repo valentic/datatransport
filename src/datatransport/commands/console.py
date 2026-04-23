@@ -272,8 +272,6 @@ class XMLRPC_Console(cmd.Cmd):
         if len(matches)==1 and not matches[0].endswith(" "):
             matches = [matches[0]+" "]
 
-        #print(f"{matches=}")
-
         return matches
 
     # -- Execute ---------------------------------------------------------
