@@ -30,13 +30,20 @@
 #   2023-07-27  Todd Valentic
 #               Updated for transport3 / python3
 #
+#   2026-04-23  Todd Valentic
+#               Use rich Table to render table instead of texttable
+#               Remove dependency on texttable
+#               No longer need to pass sys.argv to ProcessClient
+#               Use init()
+#
 ##########################################################################
 
 import fnmatch
 import pathlib
-import sys
+import textwrap
 
-import texttable
+from rich.console import Console
+from rich.table import Table
 
 from datatransport import ProcessClient
 from datatransport import NewsPoster
@@ -50,8 +57,8 @@ import sapphire_config as sapphire
 class DiskMonitor(ProcessClient):
     """Process Client"""
 
-    def __init__(self, argv):
-        ProcessClient.__init__(self, argv)
+    def init(self, argv):
+        """Initialize monitor"""
 
         self.news_poster = NewsPoster(self)
         self.news_poller = NewsPoller(self, callback=self.process)
@@ -119,7 +126,7 @@ class DiskMonitor(ProcessClient):
 
         return setalarm or clearalarm
 
-    def check(self, stats):
+    def check(self, stats, timestamp):
         """Check mounted filesystems"""
 
         self.log.debug("Checking disk usage (limit is %d%%)", self.max_used_pct)
@@ -135,29 +142,32 @@ class DiskMonitor(ProcessClient):
         for exclude in self.excludes:
             mounts = [m for m in mounts if not fnmatch.fnmatch(m, exclude)]
 
+        self.history.set("DEFAULT", "last.time", str(timestamp))
+
         report = 0
 
         for mount in mounts:
             report += self.checkmount(stats, mount)
 
         if report:
-            message = self.alert_message(mounts)
+            message = self.alert_message(mounts, timestamp)
             try:
-                self.news_poster.post_text(message, date=self.timestamp)
-            except Exception as e: # pylint: disable=broad-exception-caught
-                self.log.exception("Problem posting message: %s", e)
+                self.news_poster.post_text(message, date=timestamp)
+            except Exception as e:
+                self.log.err("Problem posting message: %s", e)
 
-    def alert_message(self, mounts):
+    def alert_message(self, mounts, timestamp):
         """Return an alert message"""
 
-        timestr = self.timestamp.strftime("%Y-%m-%d %H:%M")
+        timestr = timestamp.strftime("%Y-%m-%d %H:%M:S %Z")
 
-        message = "\n"
-        message += f"Disk Space Report - {timestr}\n\n"
-
-        table = texttable.Texttable()
-        table.header(["Mount", "Total", "Used", "Avail", "% Full", "Notes"])
-        table.set_cols_align(["l", "r", "r", "r", "r", "l"])
+        table = Table()
+        table.add_column("Mount", justify="left")
+        table.add_column("Total", justify="right")
+        table.add_column("Used", justify="right")
+        table.add_column("Avail", justify="right")
+        table.add_column("% Full", justify="right")
+        table.add_column("Notes", justify="left")
 
         for mount in mounts:
             total = self.history.get_float(mount, "last.totalbytes")
@@ -165,32 +175,39 @@ class DiskMonitor(ProcessClient):
             free = self.history.get_float(mount, "last.freebytes")
             usedpct = self.history.get_float(mount, "last.usedpct")
 
-            row = [mount]
-            row.append(size_desc(total))
-            row.append(size_desc(used))
-            row.append(size_desc(free))
-            row.append(f"{usedpct:0.1f}%")
-            row.append(self.history.get(mount, "last.notes"))
+            table.add_row(
+                [
+                    size_desc(total),
+                    size_desc(used),
+                    size_desc(free),
+                    f"{usedpct:0.1f}%",
+                    self.history.get(mount, "last.notes"),
+                ]
+            )
 
-            table.add_row(row)
+        # Disable colors, enable ASCII only output
+        console = Console(color_system=None, force_terminal=True)
+        with console.capture() as capture:
+            console.print(table)
 
-        message += table.draw()
-        message += "\n"
+        return textwrap.dedent(f"""
 
-        return message
+            Disk Space Report - {timestr}
+
+            {capture.get()}
+
+        """)
 
     def process(self, message):
         """Process handler"""
 
         stats = newstool.as_config(message)
+        timestamp = newstool.message_date(message)
 
-        self.timestamp = newstool.message_date(message)
-        self.history.set("DEFAULT", "last.time", str(self.timestamp))
-
-        self.check(stats)
+        self.check(stats, timestamp)
         self.save_history()
 
 
 def main():
     """Script entry point"""
-    DiskMonitor(sys.argv).run()
+    DiskMonitor().run()
