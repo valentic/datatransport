@@ -2,8 +2,10 @@
     - Directory client - reduce log output on connect
     - Directory client - add timeout to standalone client
     - ProcessClient - no longer require sys.argv to be passed in __init__ 
-    - Major updates to xmlrpc console (better command completion, appearance)
+    - console - major updates for better command completion and appearance
     - viewlog - show processclient startup errors in a panel
+    - diskmonitor - use rich for table, remove texttable as dependency
+    - pyproject.toml - Update dependency versions 
     - Release 3.0.28
 
 2026-03-07  Todd Valentic
