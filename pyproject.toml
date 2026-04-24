@@ -17,16 +17,15 @@ classifiers = [
 ]
 
 dependencies = [
-    "python-dateutil",
-    "pytimeparse2",
-    "sapphire_config",
-    "texttable",
     "importlib_resources>1.3; python_version < '3.10'",
     "standard-nntplib; python_version >= '3.12'",
     "standard-asyncore; python_version >= '3.12'",
     "python-json-logger>=4.0.0",
     "watchdog>=6.0.0",
     "rich>=15.0.0",
+    "sapphire-config>=1.0.5",
+    "python-dateutil>=2.9.0.post0",
+    "pytimeparse2>=1.7.1",
 ]
 
 [build-system]
@@ -35,10 +34,10 @@ build-backend = "hatchling.build"
 
 [project.optional-dependencies]
 devel = [
-    'ruff',
-    'pyfakefs',
-    'pytest',
-    ]
+    "pyfakefs>=6.2.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.11",
+]
 
 [project.urls]
 homepage="https://github.com/valentic/datatransport"
