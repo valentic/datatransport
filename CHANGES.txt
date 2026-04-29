@@ -1,3 +1,8 @@
+2026-04-29  Todd Valentic
+    - Fix PyPI release version. It didn't include the latest diskmonitor in the build. 
+    - Just bump the version number for new release tarball and wheel.
+    - Release 3.0.29
+
 2026-04-14  Todd Valentic
     - Directory client - reduce log output on connect
     - Directory client - add timeout to standalone client
