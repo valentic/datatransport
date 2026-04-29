@@ -1,4 +1,8 @@
 2026-04-29  Todd Valentic
+    - archivegroups - fix usage of datetime.UTC
+    - Release 3.0.30
+
+2026-04-29  Todd Valentic
     - Fix PyPI release version. It didn't include the latest diskmonitor in the build. 
     - Just bump the version number for new release tarball and wheel.
     - Release 3.0.29
